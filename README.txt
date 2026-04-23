@@ -195,7 +195,3 @@ ECE385_Final_project.xpr              # Vivado project file
 - The holdings table persists share counts and average costs across tab switches using a per-tab register array updated each clock cycle
 
 ---
-
-## License
-
-MIT License
