@@ -1,0 +1,21 @@
+11:45:46 **** Build of configuration Debug for project uart_test ****
+make all 
+'Building file: ../src/main.c'
+'Invoking: MicroBlaze gcc compiler'
+mb-gcc -Wall -O0 -g3 -c -fmessage-length=0 -MT"src/main.o" -IC:/FPGA/ECE385_final_project/mb_platform/export/mb_platform/sw/mb_platform/standalone_domain/bspinclude/include -mno-xl-reorder -mlittle-endian -mxl-barrel-shift -mxl-pattern-compare -mcpu=v11.0 -mno-xl-soft-mul -Wl,--no-relax -ffunction-sections -fdata-sections -MMD -MP -MF"src/main.d" -MT"src/main.o" -o "src/main.o" "../src/main.c"
+'Finished building: ../src/main.c'
+' '
+'Building target: uart_test.elf'
+'Invoking: MicroBlaze gcc linker'
+mb-gcc -Wl,-T -Wl,../src/lscript.ld -LC:/FPGA/ECE385_final_project/mb_platform/export/mb_platform/sw/mb_platform/standalone_domain/bsplib/lib -mlittle-endian -mxl-barrel-shift -mxl-pattern-compare -mcpu=v11.0 -mno-xl-soft-mul -Wl,--no-relax -Wl,--gc-sections -o "uart_test.elf"  ./src/main.o   -Wl,--start-group,-lxil,-lgcc,-lc,--end-group
+'Finished building target: uart_test.elf'
+' '
+'Invoking: MicroBlaze Print Size'
+mb-size uart_test.elf  |tee "uart_test.elf.size"
+   text	   data	    bss	    dec	    hex	filename
+   5208	    316	   2084	   7608	   1db8	uart_test.elf
+'Finished building: uart_test.elf.size'
+' '
+
+11:45:47 Build Finished (took 994ms)
+

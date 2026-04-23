@@ -1,0 +1,312 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h> // Needed for xil_printf
+#include "xparameters.h"
+#include "xil_types.h"
+#include "xil_io.h"
+#include "sleep.h"
+#include "xuartlite.h"
+#include "xstatus.h"
+#include "xil_printf.h"
+
+// --- UNDEFINE MACROS TO AVOID CONFLICTS ---
+#ifdef TRUE
+#undef TRUE
+#endif
+#ifdef FALSE
+#undef FALSE
+#endif
+
+// --- USB INCLUDES ---
+#include "lw_usb/project_config.h"
+
+// ---------------------------------------------------------------------------
+// HARDWARE ADDRESSES
+// ---------------------------------------------------------------------------
+#define HDMI_BASE_ADDR        0x44A00000U
+#define OHLC_OFFSET           0
+#define MA_OFFSET             (1024 * 4)
+#define MA2_OFFSET            (2048 * 4)
+#define TEXT_OFFSET           (3072 * 4)
+#define TAB_OFFSET            (3073 * 4)
+#define BTN_STATE_OFFSET      (3074 * 4)
+#define BUDGET0_OFFSET        (3075 * 4)
+#define BUDGET1_OFFSET        (3076 * 4)
+#define PNL0_OFFSET           (3077 * 4)
+#define PNL1_OFFSET           (3078 * 4)
+
+#define GRAPH_WIDTH 160
+
+// ---------------------------------------------------------------------------
+// STOCK STRUCTS & PROFILES
+// ---------------------------------------------------------------------------
+typedef struct {
+    u32 hex_name;
+    int base_price;
+    int volatility;
+    char* log_name;
+} StockProfile;
+
+const StockProfile S_AAPL = {0x4141504C, 15000, 100, "Apple"};
+const StockProfile S_TSLA = {0x54534C41, 22000, 400, "Tesla"};
+const StockProfile S_SPX  = {0x20535058, 45000, 50,  "S&P 500"};
+const StockProfile S_BTC  = {0x20425443, 30000, 800, "Bitcoin"};
+
+// ---------------------------------------------------------------------------
+// KEYCODES
+// ---------------------------------------------------------------------------
+#define KEY_1  0x1E
+#define KEY_2  0x1F
+#define KEY_3  0x20
+#define KEY_4  0x21
+#define KEY_B  0x05
+#define KEY_S  0x16
+#define KEY_R  0x15
+
+// ---------------------------------------------------------------------------
+// GLOBALS
+// ---------------------------------------------------------------------------
+u32 graph_data[GRAPH_WIDTH];
+u32 ma_data[GRAPH_WIDTH];
+u32 ma2_data[GRAPH_WIDTH];
+int raw_price_history[GRAPH_WIDTH];
+static BOOT_KBD_REPORT kbd_buf;
+
+int current_price_cents;
+int volatility;
+#define CENTS_PER_PIXEL 5
+
+// Portfolio
+float cash_usd = 10000.00;
+float initial_capital = 10000.00;
+int shares_owned = 0;
+
+// ---------------------------------------------------------------------------
+// HELPER FUNCTIONS
+// ---------------------------------------------------------------------------
+static u8 clamp_to_u8(int val) {
+    if (val < 0)   return 0;
+    if (val > 255) return 255;
+    return (u8)val;
+}
+
+// Helper to pack string into 32-bit integers
+void write_string_to_regs(char* str, u32 addr0, u32 addr1) {
+    u32 r0 = 0, r1 = 0;
+    if(str[0]) r0 |= (str[0] << 24);
+    if(str[1]) r0 |= (str[1] << 16);
+    if(str[2]) r0 |= (str[2] << 8);
+    if(str[3]) r0 |= (str[3]);
+
+    if(str[4]) r1 |= (str[4] << 24);
+    if(str[5]) r1 |= (str[5] << 16);
+    if(str[6]) r1 |= (str[6] << 8);
+    if(str[7]) r1 |= (str[7]);
+
+    Xil_Out32(HDMI_BASE_ADDR + addr0, r0);
+    Xil_Out32(HDMI_BASE_ADDR + addr1, r1);
+}
+
+// --- OPTIMIZED DISPLAY FUNCTION ---
+void update_stats_display() {
+    // 1. Calculate Values using INTEGERS (Cents) to avoid float bloat
+    int equity_cents = (int)(cash_usd * 100) + (shares_owned * current_price_cents);
+    int initial_cents = (int)(initial_capital * 100);
+    int pnl_cents = equity_cents - initial_cents;
+    int cash_cents = (int)(cash_usd * 100);
+
+    // 2. Format Budget String manually ("$12345")
+    char buf_budget[10];
+    int cash_dollars = cash_cents / 100;
+    // Simple integer to string conversion
+    // Note: We use xil_printf for debug, but need to pack bits for hardware.
+    // Hack: Just display integer dollars for now to save space
+    int idx = 0;
+    buf_budget[idx++] = '$';
+
+    // Manual Itoa (Integer to ASCII)
+    int temp = cash_dollars;
+    int div = 10000; // Max 5 digits for this demo
+    while (div > 0) {
+        int digit = temp / div;
+        if (digit > 0 || idx > 1 || div == 1) { // Skip leading zeros
+            buf_budget[idx++] = '0' + digit;
+        }
+        temp %= div;
+        div /= 10;
+    }
+    buf_budget[idx] = '\0'; // Null terminate
+
+    // 3. Format PnL String ("+$500")
+    char buf_pnl[10];
+    idx = 0;
+    if (pnl_cents >= 0) buf_pnl[idx++] = '+';
+    else {
+        buf_pnl[idx++] = '-';
+        pnl_cents = -pnl_cents;
+    }
+    buf_pnl[idx++] = '$';
+
+    int pnl_dollars = pnl_cents / 100;
+    temp = pnl_dollars;
+    div = 10000;
+    while (div > 0) {
+        int digit = temp / div;
+        if (digit > 0 || idx > 2 || div == 1) {
+            buf_pnl[idx++] = '0' + digit;
+        }
+        temp %= div;
+        div /= 10;
+    }
+    buf_pnl[idx] = '\0';
+
+    // 4. Write to Hardware
+    write_string_to_regs(buf_budget, BUDGET0_OFFSET, BUDGET1_OFFSET);
+    write_string_to_regs(buf_pnl, PNL0_OFFSET, PNL1_OFFSET);
+}
+
+
+
+
+void clear_screen() {
+    for (int i = 0; i < GRAPH_WIDTH; i++) {
+        raw_price_history[i] = 0;
+        graph_data[i] = 0;
+        ma_data[i] = 0;
+        ma2_data[i] = 0;
+        Xil_Out32(HDMI_BASE_ADDR + OHLC_OFFSET + (i * 4), 0);
+        Xil_Out32(HDMI_BASE_ADDR + MA_OFFSET   + (i * 4), 0);
+        Xil_Out32(HDMI_BASE_ADDR + MA2_OFFSET  + (i * 4), 0);
+    }
+}
+
+void load_stock(StockProfile s, int tab_id) {
+    xil_printf("Loading Stock: %s\r\n", s.log_name);
+    Xil_Out32(HDMI_BASE_ADDR + TEXT_OFFSET, s.hex_name);
+    Xil_Out32(HDMI_BASE_ADDR + TAB_OFFSET, tab_id);
+
+    current_price_cents = s.base_price;
+    volatility = s.volatility;
+
+    // Reset Shares on switch (Simple Mock Logic)
+    if(shares_owned > 0) {
+        shares_owned = 0;
+    }
+
+    clear_screen();
+}
+
+void update_display(int open_px, int high_px, int low_px, int close_px) {
+    for (int i = 0; i < GRAPH_WIDTH - 1; i++) {
+        graph_data[i]        = graph_data[i + 1];
+        ma_data[i]           = ma_data[i + 1];
+        ma2_data[i]          = ma2_data[i + 1];
+        raw_price_history[i] = raw_price_history[i + 1];
+    }
+    raw_price_history[GRAPH_WIDTH - 1] = close_px;
+
+    u32 packed_ohlc = ((u32)clamp_to_u8(high_px) << 24) |
+                      ((u32)clamp_to_u8(low_px) << 16)  |
+                      ((u32)clamp_to_u8(open_px) << 8)  |
+                      ((u32)clamp_to_u8(close_px));
+
+    graph_data[GRAPH_WIDTH - 1] = packed_ohlc;
+
+    int sum = 0, count = 0;
+    for (int k = 0; k < 10; k++) {
+        int idx = (GRAPH_WIDTH - 1) - k;
+        if (idx >= 0 && raw_price_history[idx] > 0) { sum += raw_price_history[idx]; count++; }
+    }
+    ma_data[GRAPH_WIDTH - 1] = (count > 0) ? clamp_to_u8(sum / count) : clamp_to_u8(close_px);
+
+    int sum2 = 0, count2 = 0;
+    for (int k = 0; k < 20; k++) {
+        int idx = (GRAPH_WIDTH - 1) - k;
+        if (idx >= 0 && raw_price_history[idx] > 0) { sum2 += raw_price_history[idx]; count2++; }
+    }
+    ma2_data[GRAPH_WIDTH - 1] = (count2 > 0) ? clamp_to_u8(sum2 / count2) : clamp_to_u8(close_px);
+
+    for (int i = 0; i < GRAPH_WIDTH; i++) {
+        Xil_Out32(HDMI_BASE_ADDR + OHLC_OFFSET + (i * 4), graph_data[i]);
+        Xil_Out32(HDMI_BASE_ADDR + MA_OFFSET   + (i * 4), ma_data[i]);
+        Xil_Out32(HDMI_BASE_ADDR + MA2_OFFSET  + (i * 4), ma2_data[i]);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// MAIN
+// ---------------------------------------------------------------------------
+int main()
+{
+    MAX3421E_init();
+    USB_init();
+    load_stock(S_AAPL, 1);
+    srand(123);
+
+    while (1) {
+        MAX3421E_Task();
+        USB_Task();
+
+        // Declare and Reset Button State
+        u32 btn_state = 0;
+
+        if (GetUsbTaskState() == USB_STATE_RUNNING) {
+            if (kbdPoll(&kbd_buf) == 0) {
+                u8 key = kbd_buf.keycode[0];
+                if (key > 0) {
+                    switch(key) {
+                        case KEY_1: load_stock(S_AAPL, 1); break;
+                        case KEY_2: load_stock(S_TSLA, 2); break;
+                        case KEY_3: load_stock(S_SPX,  3); break;
+                        case KEY_4: load_stock(S_BTC,  4); break;
+                        case KEY_R: clear_screen(); break;
+
+                        // BUY LOGIC (Hold 'B')
+                        case KEY_B:
+                            btn_state = 1;
+                            if (cash_usd >= (current_price_cents/100.0f)) {
+                                cash_usd -= (current_price_cents/100.0f);
+                                shares_owned++;
+                            }
+                            break;
+
+                        // SELL LOGIC (Hold 'S')
+                        case KEY_S:
+                            btn_state = 2;
+                            if (shares_owned > 0) {
+                                cash_usd += (current_price_cents/100.0f);
+                                shares_owned--;
+                            }
+                            break;
+                    }
+                }
+            }
+        }
+
+        Xil_Out32(HDMI_BASE_ADDR + BTN_STATE_OFFSET, btn_state);
+        update_stats_display();
+
+        // Graph Generation
+        int delta = (rand() % volatility) - (volatility / 2);
+        current_price_cents += delta;
+
+        int last_valid_pixel = 128;
+        if(raw_price_history[GRAPH_WIDTH-1] != 0) last_valid_pixel = raw_price_history[GRAPH_WIDTH-1];
+
+        int step = (rand() % 10) - 5;
+        int close_px = last_valid_pixel + step;
+
+        // FIXED: Split lines to fix compiler warning
+        if(close_px < 20) close_px = 20;
+        if(close_px > 230) close_px = 230;
+
+        int high_val = close_px + (rand()%5);
+        int low_val = (last_valid_pixel < close_px ? last_valid_pixel : close_px) - (rand()%5);
+
+        update_display(last_valid_pixel, high_val, low_val, close_px);
+        usleep(50000);
+    }
+    return 0;
+}
+
+

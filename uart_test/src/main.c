@@ -1,0 +1,9 @@
+#include "xil_printf.h"
+
+int main() {
+    while (1) {
+        xil_printf("Hello from MicroBlaze!\r\n");
+        for (volatile int i = 0; i < 10000000; i++); // crude delay
+    }
+    return 0;
+}

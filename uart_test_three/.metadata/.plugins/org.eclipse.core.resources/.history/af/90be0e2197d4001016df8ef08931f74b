@@ -1,0 +1,616 @@
+#include "xparameters.h"
+#include "xil_types.h"
+#include "xil_io.h"
+#include "sleep.h"
+#include "xuartlite.h"
+#include "xstatus.h"
+
+// --- UNDEFINE MACROS ---
+#ifdef TRUE
+#undef TRUE
+#endif
+#ifdef FALSE
+#undef FALSE
+#endif
+
+#include "lw_usb/project_config.h"
+
+// ---------------------------------------------------------------------------
+// OFFSETS
+// ---------------------------------------------------------------------------
+#define HDMI_BASE_ADDR        0x44A00000U
+#define OHLC_OFFSET           0
+#define MA_OFFSET             (1024 * 4)
+#define MA2_OFFSET            (2048 * 4)
+#define TEXT_OFFSET           (3072 * 4)
+#define TAB_OFFSET            (3073 * 4)
+#define BTN_STATE_OFFSET      (3074 * 4)
+
+#define BUDGET0_OFFSET        (3075 * 4)
+#define BUDGET1_OFFSET        (3076 * 4)
+#define PNL0_OFFSET           (3077 * 4)
+#define PNL1_OFFSET           (3078 * 4)
+#define SHARES0_OFFSET        (3079 * 4)
+#define SHARES1_OFFSET        (3080 * 4)
+#define AVG0_OFFSET           (3081 * 4)
+#define AVG1_OFFSET           (3082 * 4)
+#define PROFIT0_OFFSET        (3083 * 4)
+#define PROFIT1_OFFSET        (3084 * 4)
+#define GRID_TOP_OFFSET       (3085 * 4)
+#define GRID_MID_OFFSET       (3086 * 4)
+#define GRID_BOT_OFFSET       (3087 * 4)
+#define CUR_PRICE0_OFFSET     (3088 * 4)
+#define CUR_PRICE1_OFFSET     (3089 * 4)
+
+#define GRAPH_WIDTH           160
+#define UARTLITE_DEVICE_ID    XPAR_UARTLITE_0_DEVICE_ID
+
+// KEYCODES
+#define KEY_1   0x1E
+#define KEY_2   0x1F
+#define KEY_3   0x20
+#define KEY_4   0x21
+#define KEY_B   0x05
+#define KEY_S   0x16
+#define KEY_R   0x15
+// New Arrow Keys
+#define KEY_UP    0x52
+#define KEY_DOWN  0x51
+
+// ---------------------------------------------------------------------------
+// GLOBAL BUFFERS
+// ---------------------------------------------------------------------------
+u32 graph_data[GRAPH_WIDTH];
+u32 ma_data[GRAPH_WIDTH];
+u32 ma2_data[GRAPH_WIDTH];
+int raw_price_history[GRAPH_WIDTH]; // Stores pixel values
+
+// NEW: Stores actual price in cents for rescaling fidelity
+int actual_price_history_cents[GRAPH_WIDTH];
+
+static BOOT_KBD_REPORT kbd_buf;
+
+// ---------------------------------------------------------------------------
+// FINANCIAL GLOBALS
+// ---------------------------------------------------------------------------
+int cash_cents = 1000000;       // $10,000.00
+int initial_cents = 1000000;    // $10,000.00
+
+int shares_owned = 0;
+int avg_buy_price_cents = 0;
+int latest_valid_price_cents = 0; // Current Live Price
+
+typedef struct {
+    int saved_shares;
+    int saved_avg_cost;
+} StockStorage;
+
+StockStorage portfolio_data[5];
+
+// ---------------------------------------------------------------------------
+// STOCK PROFILES (For Simulation)
+// ---------------------------------------------------------------------------
+typedef struct {
+    char* name;
+    int base_price;
+    int volatility;
+} StockProfile;
+
+// Fake starting data for testing
+const StockProfile S_TSLA = {"TSLA", 42000, 150};
+const StockProfile S_AAPL = {"AAPL", 18000, 50};
+const StockProfile S_AMZN = {"AMZN", 14500, 80};
+const StockProfile S_BTC  = {"BTC ", 95000, 500};
+
+// Current Simulation State
+int current_volatility = 100;
+
+// ---------------------------------------------------------------------------
+// AGGREGATION & ZOOM
+// ---------------------------------------------------------------------------
+#define TICKS_PER_CANDLE 4
+
+int agg_count      = 0;
+int agg_open_px    = 0;
+int agg_high_px    = 0;
+int agg_low_px     = 0;
+int agg_close_px   = 0;
+int last_close_px  = -1;
+
+int BASE_PRICE_CENTS = -1;
+
+// CHANGED: Variable for Zooming (Default 8 cents per pixel)
+int current_cents_per_pixel = 8;
+
+typedef enum {
+    SYMBOL_TSLA = 1,
+    SYMBOL_AAPL = 2,
+    SYMBOL_AMZN = 3,
+    SYMBOL_BTC  = 4
+} SymbolId;
+
+static SymbolId current_symbol = SYMBOL_TSLA;
+static u32 rng_state = 12345;
+
+// ---------------------------------------------------------------------------
+// HELPER FUNCTIONS
+// ---------------------------------------------------------------------------
+int fast_rand() {
+    rng_state = rng_state * 1103515245 + 12345;
+    return (unsigned int)(rng_state / 65536) % 32768;
+}
+
+static u8 clamp_to_u8(int val) {
+    if (val < 0)   return 0;
+    if (val > 255) return 255;
+    return (u8)val;
+}
+
+void write_string_to_regs(char* str, u32 addr0, u32 addr1) {
+    u32 r0 = 0, r1 = 0;
+    if(str[0]) r0 |= (str[0] << 24); if(str[1]) r0 |= (str[1] << 16); if(str[2]) r0 |= (str[2] << 8); if(str[3]) r0 |= (str[3]);
+    if(str[4]) r1 |= (str[4] << 24); if(str[5]) r1 |= (str[5] << 16); if(str[6]) r1 |= (str[6] << 8); if(str[7]) r1 |= (str[7]);
+    Xil_Out32(HDMI_BASE_ADDR + addr0, r0);
+    Xil_Out32(HDMI_BASE_ADDR + addr1, r1);
+}
+
+static void set_ticker_label(const char *s) {
+    u32 w = ((u32)s[0] << 24) | ((u32)s[1] << 16) | ((u32)s[2] << 8) | ((u32)s[3] << 0);
+    Xil_Out32(HDMI_BASE_ADDR + TEXT_OFFSET, w);
+}
+
+// Lightweight Int to String (4 chars max)
+void int_to_str_4(int val, char* buf) {
+    if (val < 0) val = 0;
+    int d3 = (val / 1000) % 10;
+    int d2 = (val / 100) % 10;
+    int d1 = (val / 10) % 10;
+    int d0 = val % 10;
+
+    int i = 0;
+    if (val >= 1000) buf[i++] = '0' + d3;
+    if (val >= 100)  buf[i++] = '0' + d2;
+    if (val >= 10)   buf[i++] = '0' + d1;
+    buf[i++] = '0' + d0;
+    while(i < 4) buf[i++] = ' ';
+}
+
+// Helper to format price "$123.45" into 8-char buffer manually
+void format_price_string(int price_cents, char* buf) {
+    for(int i=0; i<8; i++) buf[i] = ' '; // Clear buffer
+    int dollars = price_cents / 100;
+    int cents   = price_cents % 100;
+    int i = 7; // End of buffer
+
+    // Cents
+    buf[i--] = '0' + (cents % 10);
+    buf[i--] = '0' + (cents / 10);
+    buf[i--] = '.';
+
+    // Dollars
+    if (dollars == 0) {
+        buf[i--] = '0';
+    } else {
+        while (dollars > 0 && i >= 1) { // Leave index 0 for '$'
+            buf[i--] = '0' + (dollars % 10);
+            dollars /= 10;
+        }
+    }
+    buf[i] = '$';
+}
+
+// ---------------------------------------------------------------------------
+// DISPLAY UPDATES
+// ---------------------------------------------------------------------------
+void update_stats_display() {
+    char buf_budget[16] = {0}; char buf_pnl[16] = {0};
+    char buf_shares[16] = {0}; char buf_avg[16] = {0};
+    char buf_profit[16] = {0};
+
+    int calc_price = (latest_valid_price_cents > 0) ? latest_valid_price_cents : 0;
+
+    long long equity_calc = (long long)cash_cents + ((long long)shares_owned * calc_price);
+    int total_pnl_val = (int)equity_calc - initial_cents;
+    long long pure_profit_calc = (long long)shares_owned * (calc_price - avg_buy_price_cents);
+    int pure_profit_val = (int)pure_profit_calc;
+
+    // BUDGET
+    int idx = 0; buf_budget[idx++] = '$';
+    int cash_dollars = cash_cents / 100;
+    if (cash_dollars > 99999) cash_dollars = 99999;
+    int temp = cash_dollars; int div = 10000;
+    while (div > 0) {
+        int digit = temp / div;
+        if (digit > 0 || idx > 1 || div == 1) buf_budget[idx++] = '0' + digit;
+        temp %= div; div /= 10;
+    }
+
+    // PNL
+    idx = 0;
+    if (total_pnl_val >= 0) buf_pnl[idx++] = '+';
+    else { buf_pnl[idx++] = '-'; total_pnl_val = -total_pnl_val; }
+    buf_pnl[idx++] = '$';
+    int pnl_dollars = total_pnl_val / 100;
+    if (pnl_dollars > 99999) pnl_dollars = 99999;
+    temp = pnl_dollars; div = 10000;
+    while (div > 0) {
+        int digit = temp / div;
+        if (digit > 0 || idx > 2 || div == 1) buf_pnl[idx++] = '0' + digit;
+        temp %= div; div /= 10;
+    }
+
+    // SHARES
+    idx = 0; temp = shares_owned; div = 1000;
+    while (div > 0) {
+        int digit = temp / div;
+        if (digit > 0 || idx > 0 || div == 1) buf_shares[idx++] = '0' + digit;
+        temp %= div; div /= 10;
+    }
+
+    // AVG
+    idx = 0; buf_avg[idx++] = '$';
+    int avg_dollars = avg_buy_price_cents / 100;
+    if (avg_dollars > 99999) avg_dollars = 99999;
+    temp = avg_dollars; div = 10000;
+    while (div > 0) {
+        int digit = temp / div;
+        if (digit > 0 || idx > 1 || div == 1) buf_avg[idx++] = '0' + digit;
+        temp %= div; div /= 10;
+    }
+
+    // PROFIT
+    idx = 0;
+    if (pure_profit_val >= 0) buf_profit[idx++] = '+';
+    else { buf_profit[idx++] = '-'; pure_profit_val = -pure_profit_val; }
+    buf_profit[idx++] = '$';
+    int profit_dollars = pure_profit_val / 100;
+    if (profit_dollars > 99999) profit_dollars = 99999;
+    temp = profit_dollars; div = 10000;
+    while (div > 0) {
+        int digit = temp / div;
+        if (digit > 0 || idx > 2 || div == 1) buf_profit[idx++] = '0' + digit;
+        temp %= div; div /= 10;
+    }
+
+    write_string_to_regs(buf_budget, BUDGET0_OFFSET, BUDGET1_OFFSET);
+    write_string_to_regs(buf_pnl,    PNL0_OFFSET,    PNL1_OFFSET);
+    write_string_to_regs(buf_shares, SHARES0_OFFSET, SHARES1_OFFSET);
+    write_string_to_regs(buf_avg,    AVG0_OFFSET,    AVG1_OFFSET);
+    write_string_to_regs(buf_profit, PROFIT0_OFFSET, PROFIT1_OFFSET);
+}
+
+void update_y_axis_labels() {
+     if (BASE_PRICE_CENTS < 0) return;
+     // CHANGED: Use variable scale for dynamic labels
+     int range_step_cents = 42 * current_cents_per_pixel;
+     int top_val_cents = BASE_PRICE_CENTS + range_step_cents;
+     int mid_val_cents = BASE_PRICE_CENTS;
+     int bot_val_cents = BASE_PRICE_CENTS - range_step_cents;
+
+     char s_top[8] = {0}, s_mid[8] = {0}, s_bot[8] = {0};
+
+     int_to_str_4(top_val_cents/100, s_top);
+     int_to_str_4(mid_val_cents/100, s_mid);
+     int_to_str_4(bot_val_cents/100, s_bot);
+
+     u32 reg_top = ((u32)s_top[0]<<24) | ((u32)s_top[1]<<16) | ((u32)s_top[2]<<8) | ((u32)s_top[3]);
+     u32 reg_mid = ((u32)s_mid[0]<<24) | ((u32)s_mid[1]<<16) | ((u32)s_mid[2]<<8) | ((u32)s_mid[3]);
+     u32 reg_bot = ((u32)s_bot[0]<<24) | ((u32)s_bot[1]<<16) | ((u32)s_bot[2]<<8) | ((u32)s_bot[3]);
+
+     Xil_Out32(HDMI_BASE_ADDR + GRID_TOP_OFFSET, reg_top);
+     Xil_Out32(HDMI_BASE_ADDR + GRID_MID_OFFSET, reg_mid);
+     Xil_Out32(HDMI_BASE_ADDR + GRID_BOT_OFFSET, reg_bot);
+}
+
+static void clear_graph_bram(void) {
+    for (int i = 0; i < GRAPH_WIDTH; i++) {
+        graph_data[i] = 0; ma_data[i] = 0; ma2_data[i] = 0; raw_price_history[i] = 0;
+        actual_price_history_cents[i] = 0; // Clear raw history too
+        Xil_Out32(HDMI_BASE_ADDR + OHLC_OFFSET + (i * 4), 0);
+        Xil_Out32(HDMI_BASE_ADDR + MA_OFFSET   + (i * 4), 0);
+        Xil_Out32(HDMI_BASE_ADDR + MA2_OFFSET  + (i * 4), 0);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// OPTIMIZED RESCALE (No Blink)
+// ---------------------------------------------------------------------------
+void rescale_graph() {
+    // 1. Update Grid Labels immediately
+    update_y_axis_labels();
+
+    // 2. Single pass: Overwrite old data with new scaled data
+    for (int i = 0; i < GRAPH_WIDTH; i++) {
+        int price = actual_price_history_cents[i];
+
+        if (price == 0) {
+            // If this slot is empty, write 0 (clears it if it had old garbage)
+            Xil_Out32(HDMI_BASE_ADDR + OHLC_OFFSET + (i * 4), 0);
+            Xil_Out32(HDMI_BASE_ADDR + MA_OFFSET   + (i * 4), 0);
+            Xil_Out32(HDMI_BASE_ADDR + MA2_OFFSET  + (i * 4), 0);
+
+            // Sync buffers
+            graph_data[i] = 0;
+            ma_data[i] = 0;
+            ma2_data[i] = 0;
+            raw_price_history[i] = 0;
+        }
+        else {
+            // Calculate new pixel height
+            int delta_cents = price - BASE_PRICE_CENTS;
+            int offset_px = delta_cents / current_cents_per_pixel;
+            int pixel_val = 128 + offset_px;
+
+            // Clamp
+            if (pixel_val < 5)   pixel_val = 5;
+            if (pixel_val > 250) pixel_val = 250;
+
+            // Create flat candle for history (Since we only saved Close price)
+            u32 packed_ohlc = ((u32)clamp_to_u8(pixel_val) << 24) |
+                              ((u32)clamp_to_u8(pixel_val) << 16) |
+                              ((u32)clamp_to_u8(pixel_val) << 8)  |
+                              ((u32)clamp_to_u8(pixel_val));
+
+            // Update buffers
+            graph_data[i] = packed_ohlc;
+            ma_data[i]    = clamp_to_u8(pixel_val);
+            ma2_data[i]   = clamp_to_u8(pixel_val);
+            raw_price_history[i] = pixel_val; // Vital for smooth MA continuation
+
+            // Write valid data immediately (Overwrites old data instantly)
+            Xil_Out32(HDMI_BASE_ADDR + OHLC_OFFSET + (i * 4), packed_ohlc);
+            Xil_Out32(HDMI_BASE_ADDR + MA_OFFSET   + (i * 4), ma_data[i]);
+            Xil_Out32(HDMI_BASE_ADDR + MA2_OFFSET  + (i * 4), ma2_data[i]);
+        }
+    }
+
+    // Reset Aggregation to prevent glitches on the next new candle
+    agg_count = 0;
+}
+
+
+
+
+// ---------------------------------------------------------------------------
+// LOAD STOCK SIMULATION (WITH WARM-UP)
+// ---------------------------------------------------------------------------
+void load_stock_simulation(StockProfile s, int tab_id) {
+    set_ticker_label(s.name);
+    Xil_Out32(HDMI_BASE_ADDR + TAB_OFFSET, tab_id);
+
+    // Set simulation params
+    current_volatility = s.volatility;
+
+    // Set the starting prices
+    latest_valid_price_cents = s.base_price;
+    BASE_PRICE_CENTS = s.base_price;
+
+    // Reset Aggregation variables
+    agg_count = 0; agg_open_px = 0; agg_high_px = 0; agg_low_px = 0; agg_close_px = 0;
+    last_close_px = -1;
+
+    // Update Grid Labels for the new stock
+    update_y_axis_labels();
+
+    // --- INSTANT FILL (WARM UP LOOP) ---
+    // Instead of clearing the screen to 0, we generate 160 points of history immediately.
+    int warm_up_price = s.base_price;
+
+    for (int i = 0; i < GRAPH_WIDTH; i++) {
+        // 1. Simulate Random Movement
+        int delta = (fast_rand() % current_volatility) - (current_volatility / 2);
+        warm_up_price += delta;
+
+        // 2. Save to History Buffers (Crucial for Zooming!)
+        actual_price_history_cents[i] = warm_up_price;
+
+        // 3. Calculate Pixel Height
+        int delta_cents = warm_up_price - BASE_PRICE_CENTS;
+        int offset_px = delta_cents / current_cents_per_pixel;
+        int pixel_val = 128 + offset_px;
+
+        // Clamp
+        if (pixel_val < 5)   pixel_val = 5;
+        if (pixel_val > 250) pixel_val = 250;
+
+        // 4. Create Candle Data
+        u32 packed_ohlc = ((u32)clamp_to_u8(pixel_val) << 24) |
+                          ((u32)clamp_to_u8(pixel_val) << 16) |
+                          ((u32)clamp_to_u8(pixel_val) << 8)  |
+                          ((u32)clamp_to_u8(pixel_val));
+
+        // 5. Update Software Buffers
+        graph_data[i] = packed_ohlc;
+        ma_data[i]    = clamp_to_u8(pixel_val);
+        ma2_data[i]   = clamp_to_u8(pixel_val);
+        raw_price_history[i] = pixel_val;
+
+        // 6. Write to FPGA Immediately
+        Xil_Out32(HDMI_BASE_ADDR + OHLC_OFFSET + (i * 4), packed_ohlc);
+        Xil_Out32(HDMI_BASE_ADDR + MA_OFFSET   + (i * 4), ma_data[i]);
+        Xil_Out32(HDMI_BASE_ADDR + MA2_OFFSET  + (i * 4), ma2_data[i]);
+    }
+
+    // Hand off the last price to the main loop so it continues smoothly
+    latest_valid_price_cents = warm_up_price;
+}
+
+
+
+// CHANGED: Added 'close_cents' argument to save history
+void update_display(int open_px, int high_px, int low_px, int close_px, int close_cents) {
+    for (int i = 0; i < GRAPH_WIDTH - 1; i++) {
+        graph_data[i] = graph_data[i + 1];
+        ma_data[i] = ma_data[i + 1];
+        ma2_data[i] = ma2_data[i + 1];
+        raw_price_history[i] = raw_price_history[i + 1];
+        actual_price_history_cents[i] = actual_price_history_cents[i + 1]; // Shift real history
+    }
+    raw_price_history[GRAPH_WIDTH - 1] = close_px;
+    actual_price_history_cents[GRAPH_WIDTH - 1] = close_cents; // Save real price
+
+    u32 packed_ohlc = ((u32)clamp_to_u8(high_px) << 24) | ((u32)clamp_to_u8(low_px) << 16) |
+                      ((u32)clamp_to_u8(open_px) << 8)  | ((u32)clamp_to_u8(close_px));
+    graph_data[GRAPH_WIDTH - 1] = packed_ohlc;
+
+    int sum = 0, count = 0;
+    for (int k = 0; k < 10; k++) {
+        int idx = (GRAPH_WIDTH - 1) - k;
+        if (idx >= 0 && raw_price_history[idx] > 0) { sum += raw_price_history[idx]; count++; }
+    }
+    int avg_px = (count > 0) ? (sum / count) : close_px;
+    ma_data[GRAPH_WIDTH - 1] = clamp_to_u8(avg_px);
+
+    int sum2 = 0, count2 = 0;
+    for (int k = 0; k < 20; k++) {
+        int idx = (GRAPH_WIDTH - 1) - k;
+        if (idx >= 0 && raw_price_history[idx] > 0) { sum2 += raw_price_history[idx]; count2++; }
+    }
+    int avg_px2 = (count2 > 0) ? (sum2 / count2) : close_px;
+    ma2_data[GRAPH_WIDTH - 1] = clamp_to_u8(avg_px2);
+
+    for (int i = 0; i < GRAPH_WIDTH; i++) {
+        Xil_Out32(HDMI_BASE_ADDR + OHLC_OFFSET + (i * 4), graph_data[i]);
+        Xil_Out32(HDMI_BASE_ADDR + MA_OFFSET   + (i * 4), ma_data[i]);
+        Xil_Out32(HDMI_BASE_ADDR + MA2_OFFSET  + (i * 4), ma2_data[i]);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// MAIN
+// ---------------------------------------------------------------------------
+int main()
+{
+    // Init Portfolio
+    for(int i=0; i<5; i++) { portfolio_data[i].saved_shares = 0; portfolio_data[i].saved_avg_cost = 0; }
+
+    MAX3421E_init();
+    USB_init();
+
+    // Initial Load (TSLA)
+    current_symbol = SYMBOL_TSLA;
+    load_stock_simulation(S_TSLA, 1);
+
+    while (1) {
+        MAX3421E_Task();
+        USB_Task();
+        u32 btn_state = 0;
+
+        if (GetUsbTaskState() == USB_STATE_RUNNING) {
+            if (kbdPoll(&kbd_buf) == 0) {
+                u8 key = kbd_buf.keycode[0];
+                if (key > 0) {
+                    SymbolId new_sym = current_symbol;
+                    switch(key) {
+                        case KEY_1: new_sym = SYMBOL_TSLA; break;
+                        case KEY_2: new_sym = SYMBOL_AAPL; break;
+                        case KEY_3: new_sym = SYMBOL_AMZN; break;
+                        case KEY_4: new_sym = SYMBOL_BTC;  break;
+
+                        case KEY_R:
+                            if(current_symbol==SYMBOL_TSLA) load_stock_simulation(S_TSLA, 1);
+                            if(current_symbol==SYMBOL_AAPL) load_stock_simulation(S_AAPL, 2);
+                            if(current_symbol==SYMBOL_AMZN) load_stock_simulation(S_AMZN, 3);
+                            if(current_symbol==SYMBOL_BTC)  load_stock_simulation(S_BTC, 4);
+                            break;
+
+                        // --- NEW ZOOM CONTROLS ---
+                        case KEY_UP: // Zoom In (Decrease cents per pixel)
+                            if (current_cents_per_pixel > 2) {
+                                current_cents_per_pixel -= 2;
+                                rescale_graph();
+                            }
+                            break;
+
+                        case KEY_DOWN: // Zoom Out (Increase cents per pixel)
+                            if (current_cents_per_pixel < 200) {
+                                current_cents_per_pixel += 2;
+                                rescale_graph();
+                            }
+                            break;
+
+                        case KEY_B:
+                            btn_state = 1;
+                            if (latest_valid_price_cents > 0 && cash_cents >= latest_valid_price_cents) {
+                                long long total_cost = ((long long)shares_owned * avg_buy_price_cents) + latest_valid_price_cents;
+                                shares_owned++;
+                                avg_buy_price_cents = (int)(total_cost / shares_owned);
+                                cash_cents -= latest_valid_price_cents;
+                            }
+                            break;
+                        case KEY_S:
+                            btn_state = 2;
+                            if (shares_owned > 0 && latest_valid_price_cents > 0) {
+                                cash_cents += latest_valid_price_cents;
+                                shares_owned--;
+                                if (shares_owned == 0) avg_buy_price_cents = 0;
+                            }
+                            break;
+                    }
+
+                    if (new_sym != current_symbol) {
+                        // SAVE State
+                        portfolio_data[current_symbol].saved_shares = shares_owned;
+                        portfolio_data[current_symbol].saved_avg_cost = avg_buy_price_cents;
+
+                        // SWITCH & LOAD
+                        current_symbol = new_sym;
+                        shares_owned = portfolio_data[current_symbol].saved_shares;
+                        avg_buy_price_cents = portfolio_data[current_symbol].saved_avg_cost;
+
+                        if(current_symbol==SYMBOL_TSLA) load_stock_simulation(S_TSLA, 1);
+                        if(current_symbol==SYMBOL_AAPL) load_stock_simulation(S_AAPL, 2);
+                        if(current_symbol==SYMBOL_AMZN) load_stock_simulation(S_AMZN, 3);
+                        if(current_symbol==SYMBOL_BTC)  load_stock_simulation(S_BTC, 4);
+                    }
+                }
+            }
+        }
+
+        Xil_Out32(HDMI_BASE_ADDR + BTN_STATE_OFFSET, btn_state);
+        update_stats_display();
+
+        // --- BROWNIAN MOTION SIMULATION ---
+        int delta = (fast_rand() % current_volatility) - (current_volatility / 2);
+        latest_valid_price_cents += delta;
+
+        // Update Current Price Display (Top Right)
+         char s_price[8];
+         format_price_string(latest_valid_price_cents, s_price);
+         write_string_to_regs(s_price, CUR_PRICE0_OFFSET, CUR_PRICE1_OFFSET);
+
+        // Calculate Pixel Position using VARIABLE scale
+        int delta_cents = latest_valid_price_cents - BASE_PRICE_CENTS;
+        int offset_px   = delta_cents / current_cents_per_pixel;
+        int close_px = 128 + offset_px;
+
+        if (close_px < 10)  close_px = 10;
+        if (close_px > 245) close_px = 245;
+
+        if (agg_count == 0) {
+            if (last_close_px >= 0) agg_open_px = last_close_px;
+            else agg_open_px = close_px;
+            agg_high_px = (close_px > agg_open_px) ? close_px : agg_open_px;
+            agg_low_px  = (close_px < agg_open_px) ? close_px : agg_open_px;
+            agg_close_px = close_px;
+        } else {
+            if (close_px > agg_high_px) agg_high_px = close_px;
+            if (close_px < agg_low_px)  agg_low_px  = close_px;
+            agg_close_px = close_px;
+        }
+
+        agg_count++;
+        if (agg_count >= TICKS_PER_CANDLE) {
+            // Pass the REAL price (cents) to update_display for history tracking
+            update_display(agg_open_px, agg_high_px, agg_low_px, agg_close_px, latest_valid_price_cents);
+            last_close_px = agg_close_px;
+            agg_count = 0;
+        }
+
+        // Simulation speed control
+        usleep(50000);
+    }
+    return 0;
+}
+
+

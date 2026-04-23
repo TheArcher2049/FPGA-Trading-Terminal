@@ -1,0 +1,283 @@
+// ===========================================================================
+//  CRITICAL BUILD FIX: UNDEFINE CONFLICTING MACROS
+//  (Ensure this is at the absolute top of the compilation unit for success)
+// ===========================================================================
+#ifdef TRUE
+#undef TRUE
+#endif
+#ifdef FALSE
+#undef FALSE
+#endif
+// ===========================================================================
+
+#include "xparameters.h"
+#include "xil_types.h"
+#include "xil_io.h"
+#include "sleep.h"
+#include "xuartlite.h"
+#include "xstatus.h"
+#include "xil_printf.h"
+
+#include <math.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "lw_usb/project_config.h"
+#include "stock_data.h"
+
+// ===========================================================================
+//  ADDRESS DEFINITIONS
+// ===========================================================================
+#define HDMI_BASE_ADDR        0x44A00000U
+#define OHLC_OFFSET           0
+#define MA_OFFSET             (1024 * 4)
+#define MA2_OFFSET            (2048 * 4)
+#define TEXT_OFFSET           (3072 * 4)
+#define TAB_OFFSET            (3073 * 4)
+#define BTN_STATE_OFFSET      (3074 * 4)
+
+#define CUR_PRICE1_OFFSET     (3089 * 4) // All other offsets assumed defined
+
+#define GRAPH_WIDTH           60
+
+// ===========================================================================
+//  KEYCODES (UNCHANGED)
+// ===========================================================================
+#define KEY_1   0x1E
+#define KEY_2   0x1F
+#define KEY_3   0x20
+#define KEY_4   0x21
+#define KEY_5   0x22
+#define KEY_6   0x23
+#define KEY_7   0x24
+#define KEY_8   0x25
+#define KEY_B   0x05
+#define KEY_S   0x16
+#define KEY_R   0x15
+#define KEY_UP    0x52
+#define KEY_DOWN  0x51
+
+// ===========================================================================
+//  UART CONSTANTS AND GLOBALS
+// ===========================================================================
+#define UARTLITE_DEVICE_ID    XPAR_UARTLITE_0_DEVICE_ID
+#define MAX_LINE_LEN          64
+#define HISTORY_LEN_DATA      160
+#define TICKS_PER_CANDLE      4   // 4 ticks received from Python form 1 candle
+
+static BOOT_KBD_REPORT kbd_buf;
+XUartLite Uart;
+
+// State Variables
+int current_mode = 0;
+int current_tab_id = 1;
+int debounce_timer = 0;
+int current_cents_per_pixel = 8;
+
+// Buffers
+u32 graph_data[160];
+u32 ma_data[160];
+u32 ma2_data[160];
+int actual_price_history_cents[HISTORY_LEN_DATA];
+
+// UART Buffer
+char uart_line_buf[MAX_LINE_LEN];
+int uart_line_idx = 0;
+
+// Aggregation State (in cents)
+int agg_count = 0;
+int agg_open_cents = 0, agg_high_cents = 0, agg_low_cents = 0, agg_close_cents = 0;
+int last_close_cents = -1;
+
+// Stock Profiles and Tracking
+typedef struct { char* name; u32 name_hex; int base_price; char* symbol_str; } StockProfile;
+
+const StockProfile S_PROFILES[] = {
+    {"NONE", 0x00000000, 0, ""},
+    {"AAPL", 0x4141504C, 15000, "AAPL"},
+    {"TSLA", 0x54534C41, 22000, "TSLA"},
+    {"AMZN", 0x414D5A4E, 14500, "AMZN"},
+    {"NVDA", 0x4E564441, 13000, "NVDA"},
+};
+
+int BASE_PRICE_CENTS[5] = {0, -1, -1, -1, -1};
+int current_live_price_cents[5] = {0, 0, 0, 0, 0};
+
+// Portfolio (UNCHANGED)
+typedef struct { int shares_owned; int avg_buy_price; int saved_shares; int saved_avg_cost; } PortfolioItem;
+int cash_cents = 1000000;
+int initial_cents = 1000000;
+PortfolioItem portfolios[5];
+
+// ===========================================================================
+//  HELPER FUNCTIONS (UNCHANGED FROM PREVIOUS CORRECTED VERSION)
+// ===========================================================================
+// (Includes clamp_u8, int_to_str_4, format_price_string, write_string_to_regs, reset_live_buffers)
+// ...
+
+// Parse "TICKER,PRICE.XX" -> price in cents
+int parse_price_cents(char *buf, const char* symbol_str)
+{
+    // ... (logic to find comma, check symbol match, and convert to cents) ...
+    char *comma = 0;
+    for (int i = 0; buf[i] != '\0'; i++) {
+        if (buf[i] == ',') { comma = &buf[i]; break; }
+    }
+    if (comma == 0) return -1; // Parse error
+
+    if (strncmp(buf, symbol_str, strlen(symbol_str)) != 0 || buf[strlen(symbol_str)] != ',') {
+        return -2; // Symbol mismatch
+    }
+
+    char *p = comma + 1;
+    int int_part = 0, frac_part = 0, frac_mult = 1, after_decimal = 0;
+
+    for (; *p != '\0'; p++) {
+        if (*p >= '0' && *p <= '9') {
+            if (!after_decimal) int_part = int_part * 10 + (*p - '0');
+            else if (frac_mult <= 100) { frac_part = frac_part * 10 + (*p - '0'); frac_mult *= 10; }
+        } else if (*p == '.') after_decimal = 1;
+    }
+    if (frac_mult == 1) frac_part = 0; else if (frac_mult == 10) frac_part *= 10;
+    else { while (frac_mult > 100) { frac_part /= 10; frac_mult /= 10; } }
+
+    return int_part * 100 + frac_part;
+}
+
+// ===========================================================================
+//  DISPLAY & GRAPH LOGIC (UNCHANGED)
+// ===========================================================================
+
+// ... (map_cents_to_pixel, update_live_grid_labels, update_live_graph_with_candle, update_stats_display, draw_history) ...
+
+// ===========================================================================
+//  MAIN FUNCTIONS
+// ===========================================================================
+
+void init_symbol(int tab_id) {
+    if(tab_id < 1 || tab_id > 4) return;
+    const StockProfile* s = &S_PROFILES[tab_id];
+    Xil_Out32(HDMI_BASE_ADDR + TEXT_OFFSET, s->name_hex);
+
+    reset_live_buffers();
+
+    BASE_PRICE_CENTS[tab_id] = -1;
+    current_live_price_cents[tab_id] = 0;
+
+    // CRUCIAL: Send symbol request to Python host
+    xil_printf("S:%s\r\n", s->symbol_str);
+
+    // Reset aggregation state
+    agg_count = 0;
+    agg_open_cents=0; agg_high_cents=0; agg_low_cents=0; agg_close_cents=0;
+    last_close_cents = -1;
+    uart_line_idx = 0;
+}
+
+void init_platform(void) {
+    // Optional: put cache/uart init here if you really need it.
+}
+
+void cleanup_platform(void) {
+    // Optional: cache disable / cleanup if needed.
+}
+
+
+int main() {
+    int status;
+
+    init_platform();
+    MAX3421E_init();
+    USB_init();
+
+    status = XUartLite_Initialize(&Uart, UARTLITE_DEVICE_ID);
+    Xil_Out32(HDMI_BASE_ADDR + TAB_OFFSET, 0); // Clear screen immediately
+    xil_printf("UART initialized. Awaiting host connection (Python).\r\n");
+
+    for(int i=0; i<5; i++) { portfolios[i].shares_owned = 0; portfolios[i].avg_buy_price = 0; }
+
+    current_mode = 0;
+    current_tab_id = 1;
+
+    init_symbol(current_tab_id);
+    Xil_Out32(HDMI_BASE_ADDR + TAB_OFFSET, current_tab_id | (current_mode << 4));
+
+    while (1) {
+        MAX3421E_Task();
+        USB_Task();
+        u32 btn_state = 0;
+        if (debounce_timer > 0) debounce_timer--;
+
+        // --- KEYBOARD INPUT (SWITCHING/TRADING) ---
+        // (The keyboard logic here calls init_symbol when 1-4 is pressed,
+        // triggering the 'S:SYMB' command to Python)
+        // ...
+
+        Xil_Out32(HDMI_BASE_ADDR + BTN_STATE_OFFSET, btn_state);
+        update_stats_display();
+
+        // --- LIVE MODE: Process Incoming UART Data ---
+        if (current_mode == 0) {
+            u8 c;
+            if (XUartLite_Recv(&Uart, &c, 1) == 1) {
+                if (c == '\n' || c == '\r') {
+                    if (uart_line_idx > 0) {
+                        uart_line_buf[uart_line_idx] = '\0';
+                        uart_line_idx = 0;
+
+                        int new_price_cents = parse_price_cents(uart_line_buf, S_PROFILES[current_tab_id].symbol_str);
+
+                        if (new_price_cents > 0) {
+
+                            if (BASE_PRICE_CENTS[current_tab_id] < 0) {
+                                BASE_PRICE_CENTS[current_tab_id] = new_price_cents;
+                                // Need to update the grid labels to show the current price range
+                                // based on the initial tick.
+                                // update_live_grid_labels();
+                            }
+
+                            current_live_price_cents[current_tab_id] = new_price_cents;
+
+                            // Candle Aggregation
+                            if (agg_count == 0) {
+                                agg_open_cents = (last_close_cents >= 0) ? last_close_cents : new_price_cents;
+                                agg_high_cents = (new_price_cents > agg_open_cents) ? new_price_cents : agg_open_cents;
+                                agg_low_cents  = (new_price_cents < agg_open_cents) ? new_price_cents : agg_open_cents;
+                                agg_close_cents = new_price_cents;
+                            } else {
+                                if (new_price_cents > agg_high_cents) agg_high_cents = new_price_cents;
+                                if (new_price_cents < agg_low_cents)  agg_low_cents = new_price_cents;
+                                agg_close_cents = new_price_cents;
+                            }
+                            agg_count++;
+
+                            if (agg_count >= TICKS_PER_CANDLE) {
+                                update_live_graph_with_candle(agg_open_cents, agg_high_cents, agg_low_cents, agg_close_cents);
+                                last_close_cents = agg_close_cents;
+                                agg_count = 0;
+                            }
+
+                            char s_price[8];
+                            // Format the most recent tick price for display
+                            format_price_string(new_price_cents, s_price);
+                            write_string_to_regs(s_price, CUR_PRICE0_OFFSET, CUR_PRICE1_OFFSET);
+
+                        } else if (new_price_cents != -2) {
+                            xil_printf("UART Parse Error: %s\r\n", uart_line_buf);
+                        }
+                    }
+                } else {
+                    if (uart_line_idx < (int)sizeof(uart_line_buf) - 1) {
+                        uart_line_buf[uart_line_idx++] = (char)c;
+                    } else {
+                        uart_line_idx = 0;
+                    }
+                }
+            }
+        }
+
+        usleep(1000);
+    }
+    cleanup_platform();
+    return 0;
+}

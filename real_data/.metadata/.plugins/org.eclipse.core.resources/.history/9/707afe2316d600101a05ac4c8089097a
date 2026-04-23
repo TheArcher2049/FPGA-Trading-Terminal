@@ -1,0 +1,133 @@
+// [Header and Macro fixes remain at the top, as they were successful]
+#ifdef TRUE
+#undef TRUE
+#endif
+#ifdef FALSE
+#undef FALSE
+#endif
+
+// [All Includes remain the same]
+#include "xparameters.h"
+#include "xil_types.h"
+#include "xil_io.h"
+#include "sleep.h"
+#include "xuartlite.h"
+#include "xstatus.h"
+#include "xil_printf.h"
+
+// [Platform definitions and all helper functions/globals remain the same]
+
+// ... (Helper function definitions like parse_price_cents, update_stats_display, etc.) ...
+
+// ===========================================================================
+//  MAIN FUNCTIONS
+// ===========================================================================
+
+void init_symbol(int tab_id) {
+    if(tab_id < 1 || tab_id > 4) return;
+    const StockProfile* s = &S_PROFILES[tab_id];
+    Xil_Out32(HDMI_BASE_ADDR + TEXT_OFFSET, s->name_hex);
+
+    // [Debug Print 1: Symbol Switch Confirmation]
+    xil_printf("[MB] Switching symbol. Tab=%d.\r\n", tab_id);
+
+    reset_live_buffers();
+
+    BASE_PRICE_CENTS[tab_id] = -1;
+    current_live_price_cents[tab_id] = 0;
+
+    // CRUCIAL: Send symbol request to Python host
+    xil_printf("S:%s\r\n", s->symbol_str);
+
+    // Reset aggregation state
+    agg_count = 0;
+    agg_open_cents=0; agg_high_cents=0; agg_low_cents=0; agg_close_cents=0;
+    last_close_cents = -1;
+    uart_line_idx = 0;
+}
+
+int main() {
+    int status;
+
+    init_platform();
+    MAX3421E_init();
+    USB_init();
+
+    status = XUartLite_Initialize(&Uart, UARTLITE_DEVICE_ID);
+    Xil_Out32(HDMI_BASE_ADDR + TAB_OFFSET, 0);
+
+    // [Debug Print 2: Initial Startup Confirmation]
+    xil_printf("[MB] MicroBlaze application started. Waiting for ticks.\r\n");
+
+    // [Initialization code remains the same...]
+
+    init_symbol(current_tab_id);
+    Xil_Out32(HDMI_BASE_ADDR + TAB_OFFSET, current_tab_id | (current_mode << 4));
+
+    while (1) {
+        // [USB polling and stat updates remain the same...]
+
+        // --- LIVE MODE: Process Incoming UART Data ---
+        if (current_mode == 0) {
+            u8 c;
+            if (XUartLite_Recv(&Uart, &c, 1) == 1) {
+                if (c == '\n' || c == '\r') {
+                    if (uart_line_idx > 0) {
+                        uart_line_buf[uart_line_idx] = '\0';
+                        uart_line_idx = 0;
+
+                        // [Debug Print 3: Received Full Line]
+                        xil_printf("[MB] Received raw: %s\r\n", uart_line_buf);
+
+                        int new_price_cents = parse_price_cents(uart_line_buf, S_PROFILES[current_tab_id].symbol_str);
+
+                        if (new_price_cents > 0) {
+
+                            // [Debug Print 4: Successful Parse]
+                            xil_printf("[MB] Parsed cents: %d. Agg count: %d.\r\n", new_price_cents, agg_count);
+
+                            // [BASE PRICE and AGGREGATION logic remains the same...]
+
+                            if (BASE_PRICE_CENTS[current_tab_id] < 0) {
+                                BASE_PRICE_CENTS[current_tab_id] = new_price_cents;
+                                update_live_grid_labels();
+                                // [Debug Print 5: Base Price Set]
+                                xil_printf("[MB] BASE PRICE SET to %d.\r\n", new_price_cents);
+                            }
+
+                            current_live_price_cents[current_tab_id] = new_price_cents;
+
+                            // ... (Aggregation logic) ...
+                            agg_count++;
+
+                            if (agg_count >= TICKS_PER_CANDLE) {
+                                // [Debug Print 6: Candle Emission]
+                                xil_printf("[MB] EMITTING CANDLE: O=%d, H=%d, L=%d, C=%d.\r\n",
+                                    agg_open_cents, agg_high_cents, agg_low_cents, agg_close_cents);
+
+                                update_live_graph_with_candle(agg_open_cents, agg_high_cents, agg_low_cents, agg_close_cents);
+                                last_close_cents = agg_close_cents;
+                                agg_count = 0;
+                            }
+
+                            char s_price[8];
+                            format_price_string(new_price_cents, s_price);
+                            write_string_to_regs(s_price, CUR_PRICE0_OFFSET, CUR_PRICE1_OFFSET);
+
+                        } else if (new_price_cents == -2) {
+                             xil_printf("[MB] WARN: Symbol mismatch (Ignoring line).\r\n");
+                        } else {
+                            xil_printf("[MB] ERROR: Parse failure for line: %s\r\n", uart_line_buf);
+                        }
+                    }
+                } else {
+                    // ... (Line accumulation logic remains the same) ...
+                }
+            }
+        }
+
+        usleep(1000);
+    }
+    cleanup_platform();
+    return 0;
+}

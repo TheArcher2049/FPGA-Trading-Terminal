@@ -1,0 +1,314 @@
+/* MAX3421E low-level functions                             */
+/* reading, writing registers, reset, host transfer, etc.   */
+
+#define _MAX3421E_C_
+
+#include "stdlib.h"
+#include "stdio.h"
+#include "string.h"
+#include "project_config.h"
+#include "xparameters.h"
+#include <unistd.h>
+#include <xspi.h>
+#include <xgpio.h>
+#include <xtmrctr.h>
+#include "xintc.h"
+
+/* variables and data structures */
+
+/* External variables */
+extern BYTE usb_task_state;
+
+/* Driver Instances */
+static XSpi SpiInstance;
+static int Status;
+static XGpio Gpio_rst;
+static XGpio Gpio_int;
+static XSpi_Config *ConfigPtr;
+XTmrCtr Usb_timer;
+
+/* ========================================================================= */
+/* SPI Initialization                                                        */
+/* ========================================================================= */
+void SPI_init() {
+    xil_printf("Initializing SPI\n");
+
+    // Ensure these XPAR names match your Vivado Block Design names!
+    // If your block is named "spi_usb", this XPAR is correct.
+    ConfigPtr = XSpi_LookupConfig(XPAR_SPI_USB_DEVICE_ID);
+    if (ConfigPtr == NULL) {
+        xil_printf("SPI Device not found\n");
+        return;
+    }
+
+    Status = XSpi_CfgInitialize(&SpiInstance, ConfigPtr, ConfigPtr->BaseAddress);
+    if (Status != XST_SUCCESS) {
+        xil_printf("SPI Device failed to initialize\n");
+        return;
+    }
+
+    // Set Options: Master Mode and Manual Slave Select
+    Status = XSpi_SetOptions(&SpiInstance, XSP_MASTER_OPTION | XSP_MANUAL_SSELECT_OPTION);
+    if (Status != XST_SUCCESS) {
+        xil_printf("SPI failed to go into master mode\n");
+        return;
+    }
+
+    XSpi_Start(&SpiInstance);
+    XSpi_IntrGlobalDisable(&SpiInstance);
+}
+
+/* Internal function (unused by MAX3421E but required by header sometimes) */
+BYTE SPI_wr(BYTE data) {
+    return 0;
+}
+
+/* ========================================================================= */
+/* Register Write (Single Byte)                                              */
+/* ========================================================================= */
+void MAXreg_wr(BYTE reg, BYTE val) {
+    // 1. Select MAX3421E (SS 0)
+    XSpi_SetSlaveSelect(&SpiInstance, 0x01);
+
+    u8 tx[2];
+
+    // 2. Command Byte: Register Address | Write Bit (0x02)
+    // Note: The header defines 'reg' pre-shifted (e.g. 1<<3), so we just OR the direction bit.
+    tx[0] = (u8)(reg | 0x02);
+    tx[1] = (u8)val;
+
+    // 3. Transfer
+    // We pass NULL for Rx buffer because we don't care what comes back during a write
+    XSpi_Transfer(&SpiInstance, tx, NULL, 2);
+
+    // 4. Deselect MAX3421E
+    XSpi_SetSlaveSelect(&SpiInstance, 0x00);
+}
+
+/* ========================================================================= */
+/* Multiple Byte Write                                                       */
+/* ========================================================================= */
+BYTE* MAXbytes_wr(BYTE reg, BYTE nbytes, BYTE* data) {
+    if (nbytes == 0) return data;
+
+    // Create a buffer for Command + Data
+    // Note: A 257 byte buffer on stack is risky on small micros, but okay for MicroBlaze here.
+    u8 txbuf[257];
+
+    // Command Byte
+    txbuf[0] = (u8)(reg | 0x02);
+
+    // Copy data to TX buffer
+    for (u32 i = 0; i < nbytes; i++) {
+        txbuf[1 + i] = data[i];
+    }
+
+    XSpi_SetSlaveSelect(&SpiInstance, 0x01);
+    XSpi_Transfer(&SpiInstance, txbuf, NULL, 1 + nbytes);
+    XSpi_SetSlaveSelect(&SpiInstance, 0x00);
+
+    return (data + nbytes);
+}
+
+/* ========================================================================= */
+/* Register Read (Single Byte)                                               */
+/* ========================================================================= */
+BYTE MAXreg_rd(BYTE reg) {
+    u8 tx[2], rx[2];
+
+    // Command Byte: Register Address (Write bit 0x02 is CLEARED for read)
+    tx[0] = (u8)reg;
+    tx[1] = 0x00; // Dummy byte to push clock
+
+    XSpi_SetSlaveSelect(&SpiInstance, 0x01);
+    XSpi_Transfer(&SpiInstance, tx, rx, 2);
+    XSpi_SetSlaveSelect(&SpiInstance, 0x00);
+
+    // rx[0] is garbage (received while we sent command)
+    // rx[1] is the actual data
+    return (BYTE)rx[1];
+}
+
+/* ========================================================================= */
+/* Multiple Byte Read                                                        */
+/* ========================================================================= */
+BYTE* MAXbytes_rd(BYTE reg, BYTE nbytes, BYTE* data) {
+    if (nbytes == 0) return data;
+    if (nbytes > 256) nbytes = 256; // Limit to buffer size
+
+    u8 txbuf[257];
+    u8 rxbuf[257];
+
+    // Command Byte
+    txbuf[0] = (u8)reg;
+
+    // Fill TX with DUMMY bytes (0x00) to push clock for reading
+    for (u32 i = 0; i < nbytes; i++) {
+        txbuf[1 + i] = 0x00;
+    }
+
+    XSpi_SetSlaveSelect(&SpiInstance, 0x01);
+    XSpi_Transfer(&SpiInstance, txbuf, rxbuf, 1 + nbytes);
+    XSpi_SetSlaveSelect(&SpiInstance, 0x00);
+
+    // Copy received data back to user buffer
+    for (u32 i = 0; i < nbytes; i++) {
+        data[i] = (BYTE)rxbuf[1 + i];
+    }
+
+    return (data + nbytes);
+}
+
+/* ========================================================================= */
+/* MAX3421E Reset & Initialization                                           */
+/* ========================================================================= */
+void MAX3421E_reset(void) {
+    // Initialize GPIOs
+    Status = XGpio_Initialize(&Gpio_rst, XPAR_GPIO_USB_RST_DEVICE_ID);
+    XGpio_SetDataDirection(&Gpio_rst, 1, 0x0); // Output
+
+    Status = XGpio_Initialize(&Gpio_int, XPAR_GPIO_USB_INT_DEVICE_ID);
+    XGpio_SetDataDirection(&Gpio_int, 1, 0x1); // Input
+
+    // Hardware Reset (Active Low or High depending on board, typically Drive Low then High)
+    XGpio_DiscreteClear(&Gpio_rst, 1, 0x1); // Drive Low
+    xil_printf("Holding USB in Reset\n");
+    usleep(1000); // Wait 1ms
+    XGpio_DiscreteSet(&Gpio_rst, 1, 0x1);   // Drive High
+    usleep(1000); // Wait 1ms
+
+    // Check Communication
+    xil_printf("Revision is: %d\n", MAXreg_rd(rREVISION));
+
+    // Software Reset
+    MAXreg_wr(rUSBCTL, bmCHIPRES); // Chip reset (stops oscillator)
+    MAXreg_wr(rUSBCTL, 0x00);      // Remove reset
+
+    // Wait for Oscillator
+    xil_printf("Waiting for PLL to stabilize...");
+    int attempts = 0;
+    while (!(MAXreg_rd(rUSBIRQ) & bmOSCOKIRQ)) {
+        usleep(1000);
+        attempts++;
+        if (attempts > 1000) {
+            xil_printf("PLL Timeout! Check SPI connections.\n");
+            break;
+        }
+    }
+    xil_printf("Stable.\n");
+}
+
+BOOL Vbus_power(BOOL action) {
+    BYTE tmp = MAXreg_rd(rIOPINS1);
+    if (action) {
+        tmp |= bmGPOUT0;
+    } else {
+        tmp &= ~bmGPOUT0;
+    }
+    MAXreg_wr(rIOPINS1, tmp);
+    usleep(10000);
+    return (TRUE);
+}
+
+void MAX_busprobe(void) {
+    BYTE bus_sample;
+    bus_sample = MAXreg_rd(rHRSL);
+    bus_sample &= (bmJSTATUS | bmKSTATUS);
+
+    switch (bus_sample) {
+        case (bmJSTATUS):
+            if (usb_task_state != USB_ATTACHED_SUBSTATE_WAIT_RESET_COMPLETE) {
+                if (!(MAXreg_rd(rMODE) & bmLOWSPEED)) {
+                    MAXreg_wr(rMODE, MODE_FS_HOST);
+                    xil_printf("Starting in full speed\n");
+                } else {
+                    MAXreg_wr(rMODE, MODE_LS_HOST);
+                    xil_printf("Starting in low speed\n");
+                }
+                usb_task_state = (USB_STATE_ATTACHED);
+            }
+            break;
+        case (bmKSTATUS):
+             if (usb_task_state != USB_ATTACHED_SUBSTATE_WAIT_RESET_COMPLETE) {
+                if (!(MAXreg_rd(rMODE) & bmLOWSPEED)) {
+                    MAXreg_wr(rMODE, MODE_LS_HOST);
+                    xil_printf("Starting in low speed\n");
+                } else {
+                    MAXreg_wr(rMODE, MODE_FS_HOST);
+                    xil_printf("Starting in full speed\n");
+                }
+                usb_task_state = (USB_STATE_ATTACHED);
+            }
+            break;
+        case (bmSE1):
+            usb_task_state = (USB_DETACHED_SUBSTATE_ILLEGAL);
+            break;
+        case (bmSE0):
+            if (!((usb_task_state & USB_STATE_MASK) == USB_STATE_DETACHED))
+                usb_task_state = (USB_DETACHED_SUBSTATE_INITIALIZE);
+            else {
+                MAXreg_wr(rMODE, MODE_FS_HOST);
+                usb_task_state = (USB_DETACHED_SUBSTATE_WAIT_FOR_DEVICE);
+            }
+            break;
+    }
+}
+
+void MAX3421E_init(void) {
+    SPI_init();
+    MAXreg_wr(rPINCTL, (bmFDUPSPI | bmINTLEVEL | bmGPXB)); // Full duplex, Level Interrupt, GPX B
+    MAX3421E_reset();
+
+    // Timer Init
+    Status = XTmrCtr_Initialize(&Usb_timer, XPAR_TIMER_USB_AXI_DEVICE_ID);
+    XTmrCtr_Start(&Usb_timer, 0);
+
+    Vbus_power(OFF);
+    Vbus_power(ON);
+
+    MAXreg_wr(rMODE, bmDPPULLDN | bmDMPULLDN | bmHOST | bmSEPIRQ);
+    MAXreg_wr(rHIEN, bmCONDETIE | bmFRAMEIE);
+    MAXreg_wr(rHCTL, bmSAMPLEBUS);
+    MAX_busprobe();
+    MAXreg_wr(rHIRQ, bmCONDETIRQ);
+    MAXreg_wr(rCPUCTL, 0x01); // Enable interrupt pin
+}
+
+void MAX3421E_Task(void) {
+    // Corrected Precedence: ((Read & 0x01) == 0)
+    if ((XGpio_DiscreteRead(&Gpio_int, 1) & 0x01) == 0) {
+        MaxIntHandler();
+    }
+}
+
+void MaxIntHandler(void) {
+    BYTE HIRQ;
+    BYTE HIRQ_sendback = 0x00;
+    HIRQ = MAXreg_rd(rHIRQ);
+
+    if (HIRQ & bmFRAMEIRQ) {
+        HIRQ_sendback |= bmFRAMEIRQ;
+    }
+    if (HIRQ & bmCONDETIRQ) {
+        MAX_busprobe();
+        HIRQ_sendback |= bmCONDETIRQ;
+    }
+    if (HIRQ & bmSNDBAVIRQ) {
+        MAXreg_wr(rSNDBC, 0x00);
+        HIRQ_sendback |= bmSNDBAVIRQ;
+    }
+    if (HIRQ & bmBUSEVENTIRQ) {
+        usb_task_state++;
+        HIRQ_sendback |= bmBUSEVENTIRQ;
+    }
+    MAXreg_wr(rHIRQ, HIRQ_sendback);
+}
+
+void MaxGpxHandler(void) {
+    BYTE GPINIRQ;
+    GPINIRQ = MAXreg_rd(rGPINIRQ);
+    // Use GPINIRQ or suppress warning
+    (void)GPINIRQ;
+}
+
+

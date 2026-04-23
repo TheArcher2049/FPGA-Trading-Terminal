@@ -1,0 +1,931 @@
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Mon Dec  8 22:52:05 2025
+| Host         : ECEB-3022-03 running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 39) to (Rev. 40)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Mon Dec  8 22:38:56 2025
+| Host         : ECEB-3022-03 running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 38) to (Rev. 39)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Mon Dec  8 22:21:27 2025
+| Host         : ECEB-3022-03 running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 37) to (Rev. 38)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Mon Dec  8 21:48:18 2025
+| Host         : ECEB-3022-03 running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 36) to (Rev. 37)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Mon Dec  8 20:07:32 2025
+| Host         : ECEB-3022-03 running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 35) to (Rev. 36)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Mon Dec  8 18:19:41 2025
+| Host         : ECEB-3022-03 running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 34) to (Rev. 35)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Sun Dec  7 22:48:51 2025
+| Host         : ECEB-3022-03 running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 33) to (Rev. 34)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Sun Dec  7 22:41:21 2025
+| Host         : ECEB-3022-03 running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 32) to (Rev. 33)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Sun Dec  7 22:37:34 2025
+| Host         : ECEB-3022-03 running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 31) to (Rev. 32)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Sun Dec  7 21:35:47 2025
+| Host         : ECEB-3022-03 running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 30) to (Rev. 31)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Sun Dec  7 21:06:28 2025
+| Host         : ECEB-3022-03 running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 29) to (Rev. 30)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Sun Dec  7 20:30:48 2025
+| Host         : ECEB-3022-03 running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 28) to (Rev. 29)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Sun Dec  7 01:35:21 2025
+| Host         : JLThinkPad running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 27) to (Rev. 28)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Sun Dec  7 01:22:45 2025
+| Host         : JLThinkPad running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 26) to (Rev. 27)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Sun Dec  7 01:11:16 2025
+| Host         : JLThinkPad running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 25) to (Rev. 26)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Sun Dec  7 00:59:07 2025
+| Host         : JLThinkPad running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 24) to (Rev. 25)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Sun Dec  7 00:50:54 2025
+| Host         : JLThinkPad running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 23) to (Rev. 24)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Sat Dec  6 22:10:24 2025
+| Host         : JLThinkPad running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 22) to (Rev. 23)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Sat Dec  6 21:41:06 2025
+| Host         : JLThinkPad running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the conversion of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0 (Rev. 22)) to Vivado generation flows.
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Sat Dec  6 21:40:06 2025
+| Host         : JLThinkPad running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 21) to (Rev. 22)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Sat Dec  6 21:25:00 2025
+| Host         : JLThinkPad running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 20) to (Rev. 21)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Sat Dec  6 20:19:28 2025
+| Host         : ECEB-3022-03 running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 19) to (Rev. 20)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Sat Dec  6 19:33:58 2025
+| Host         : ECEB-3022-03 running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 18) to (Rev. 19)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Sat Dec  6 19:05:21 2025
+| Host         : ECEB-3022-03 running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 17) to (Rev. 18)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Mon Dec  1 19:03:49 2025
+| Host         : ECEB-3022-04 running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 16) to (Rev. 17)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Sun Nov 30 18:14:14 2025
+| Host         : ECEB-3022-07 running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 15) to (Rev. 16)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Tue Nov 25 18:17:59 2025
+| Host         : ECEB-3022-07 running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 14) to (Rev. 15)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Thu Nov 20 20:16:39 2025
+| Host         : JeonghoLee running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 13) to (Rev. 14)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Thu Nov 20 20:13:40 2025
+| Host         : JeonghoLee running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 12) to (Rev. 13)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Thu Nov 20 20:02:12 2025
+| Host         : JeonghoLee running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 11) to (Rev. 12)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Thu Nov 20 19:18:19 2025
+| Host         : JeonghoLee running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 10) to (Rev. 11)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Thu Nov 20 18:56:23 2025
+| Host         : JeonghoLee running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 9) to (Rev. 10)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Thu Nov 20 17:40:33 2025
+| Host         : JeonghoLee running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 8) to (Rev. 9)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Thu Nov 20 16:10:50 2025
+| Host         : JeonghoLee running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 7) to (Rev. 8)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Thu Nov 20 15:28:28 2025
+| Host         : JeonghoLee running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 6) to (Rev. 7)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Thu Nov 20 15:11:56 2025
+| Host         : JeonghoLee running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 5) to (Rev. 6)
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Wed Nov 19 19:52:27 2025
+| Host         : ECEB-3022-04 running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the conversion of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0 (Rev. 5)) to Vivado generation flows.
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Wed Nov 19 19:26:53 2025
+| Host         : JeonghoLee running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the conversion of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0 (Rev. 5)) to Vivado generation flows.
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Wed Nov 19 19:13:16 2025
+| Host         : JeonghoLee running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+SUCCESS in the conversion of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0 (Rev. 5)) to Vivado generation flows.
+
+
+
+
+
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Wed Nov 19 19:12:25 2025
+| Host         : JeonghoLee running 64-bit major release  (build 9200)
+| Command      : upgrade_ip
+| Device       : xc7s50csga324-1
+------------------------------------------------------------------------------------
+
+Upgrade Log for IP 'mb_block_hdmi_graph_controller_0_0'
+
+1. Summary
+----------
+
+CAUTION (success, with warnings) in the upgrade of mb_block_hdmi_graph_controller_0_0 (uillinois.edu:user:hdmi_graph_controller:1.0) from (Rev. 2) to (Rev. 5)
+
+After upgrade, an IP may have parameter and port differences compared to the original customization. Please review the parameters within the IP customization GUI to ensure proper functionality. Also, please review the updated IP instantiation template to ensure proper connectivity, and update your design if required.
+
+2. Connection Warnings
+----------------------
+
+Detected external port differences while upgrading 'mb_block_hdmi_graph_controller_0_0'. These changes may impact your design.
+
+
+-Upgraded port 'axi_araddr' width 14 differs from original width 4
+
+-Upgraded port 'axi_awaddr' width 14 differs from original width 4
+
+
+3. Customization warnings
+-------------------------
+
+An attempt to modify the value of disabled parameter 'C_AXI_ADDR_WIDTH' from '14' to '4' has been ignored for IP 'mb_block_hdmi_graph_controller_0_0'
+
+
+4. Debug Commands
+-----------------
+
+  The following debug information can be passed to Vivado as Tcl commands,
+in order to validate or debug the output of the upgrade flow.
+  You may consult any warnings from within this upgrade, and alter or remove
+the configuration parameter(s) which caused the warning; then execute the Tcl
+commands, and use the IP Customization GUI to verify the IP configuration.
+
+create_ip -vlnv uillinois.edu:user:hdmi_graph_controller:1.0 -user_name mb_block_hdmi_graph_controller_0_0
+set_property -dict "\
+  CONFIG.AXI.ADDR_WIDTH {4} \
+  CONFIG.AXI.ARUSER_WIDTH {0} \
+  CONFIG.AXI.AWUSER_WIDTH {0} \
+  CONFIG.AXI.BUSER_WIDTH {0} \
+  CONFIG.AXI.CLK_DOMAIN {} \
+  CONFIG.AXI.DATA_WIDTH {32} \
+  CONFIG.AXI.FREQ_HZ {100000000} \
+  CONFIG.AXI.HAS_BRESP {1} \
+  CONFIG.AXI.HAS_BURST {0} \
+  CONFIG.AXI.HAS_CACHE {0} \
+  CONFIG.AXI.HAS_LOCK {0} \
+  CONFIG.AXI.HAS_PROT {1} \
+  CONFIG.AXI.HAS_QOS {0} \
+  CONFIG.AXI.HAS_REGION {0} \
+  CONFIG.AXI.HAS_RRESP {1} \
+  CONFIG.AXI.HAS_WSTRB {1} \
+  CONFIG.AXI.ID_WIDTH {0} \
+  CONFIG.AXI.INSERT_VIP {0} \
+  CONFIG.AXI.MAX_BURST_LENGTH {1} \
+  CONFIG.AXI.NUM_READ_OUTSTANDING {1} \
+  CONFIG.AXI.NUM_READ_THREADS {1} \
+  CONFIG.AXI.NUM_WRITE_OUTSTANDING {1} \
+  CONFIG.AXI.NUM_WRITE_THREADS {1} \
+  CONFIG.AXI.PHASE {0.0} \
+  CONFIG.AXI.PROTOCOL {AXI4LITE} \
+  CONFIG.AXI.READ_WRITE_MODE {READ_WRITE} \
+  CONFIG.AXI.RUSER_BITS_PER_BYTE {0} \
+  CONFIG.AXI.RUSER_WIDTH {0} \
+  CONFIG.AXI.SUPPORTS_NARROW_BURST {0} \
+  CONFIG.AXI.WIZ_DATA_WIDTH {32} \
+  CONFIG.AXI.WIZ_NUM_REG {4} \
+  CONFIG.AXI.WUSER_BITS_PER_BYTE {0} \
+  CONFIG.AXI.WUSER_WIDTH {0} \
+  CONFIG.AXI_CLK.ASSOCIATED_BUSIF {AXI} \
+  CONFIG.AXI_CLK.ASSOCIATED_PORT {} \
+  CONFIG.AXI_CLK.ASSOCIATED_RESET {axi_aresetn} \
+  CONFIG.AXI_CLK.CLK_DOMAIN {} \
+  CONFIG.AXI_CLK.FREQ_HZ {100000000} \
+  CONFIG.AXI_CLK.FREQ_TOLERANCE_HZ {0} \
+  CONFIG.AXI_CLK.INSERT_VIP {0} \
+  CONFIG.AXI_CLK.PHASE {0.0} \
+  CONFIG.AXI_RST.INSERT_VIP {0} \
+  CONFIG.AXI_RST.POLARITY {ACTIVE_LOW} \
+  CONFIG.C_AXI_ADDR_WIDTH {4} \
+  CONFIG.C_AXI_BASEADDR {0xFFFFFFFF} \
+  CONFIG.C_AXI_DATA_WIDTH {32} \
+  CONFIG.C_AXI_HIGHADDR {0x00000000} \
+  CONFIG.Component_Name {mb_block_hdmi_graph_controller_0_0} \
+  CONFIG.hdmi_clk_n.ASSOCIATED_BUSIF {} \
+  CONFIG.hdmi_clk_n.ASSOCIATED_PORT {} \
+  CONFIG.hdmi_clk_n.ASSOCIATED_RESET {} \
+  CONFIG.hdmi_clk_n.CLK_DOMAIN {} \
+  CONFIG.hdmi_clk_n.FREQ_HZ {100000000} \
+  CONFIG.hdmi_clk_n.FREQ_TOLERANCE_HZ {0} \
+  CONFIG.hdmi_clk_n.INSERT_VIP {0} \
+  CONFIG.hdmi_clk_n.PHASE {0.0} \
+  CONFIG.hdmi_clk_p.ASSOCIATED_BUSIF {} \
+  CONFIG.hdmi_clk_p.ASSOCIATED_PORT {} \
+  CONFIG.hdmi_clk_p.ASSOCIATED_RESET {} \
+  CONFIG.hdmi_clk_p.CLK_DOMAIN {} \
+  CONFIG.hdmi_clk_p.FREQ_HZ {100000000} \
+  CONFIG.hdmi_clk_p.FREQ_TOLERANCE_HZ {0} \
+  CONFIG.hdmi_clk_p.INSERT_VIP {0} \
+  CONFIG.hdmi_clk_p.PHASE {0.0} " [get_ips mb_block_hdmi_graph_controller_0_0]
+
+

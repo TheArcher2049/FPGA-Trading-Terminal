@@ -1,0 +1,178 @@
+#include "xparameters.h"
+#include "xuartlite.h"
+#include "xgpio.h"
+#include "xil_types.h"
+
+#define UARTLITE_DEVICE_ID   XPAR_UARTLITE_0_DEVICE_ID   // from xparameters.h
+#define GPIO_DEVICE_ID       XPAR_GPIO_0_DEVICE_ID       // from xparameters.h
+
+#define BUF_SIZE    64      // max length of one UART line "AAPL,267.4600"
+#define HISTORY_LEN 1000    // number of samples to keep
+
+
+XUartLite Uart;
+XGpio     Gpio;
+
+
+// latest price * 100, e.g. 267.46 -> 26746
+volatile int price_scaled = 0;
+
+
+// simple circular buffer in memory
+volatile int price_history[HISTORY_LEN];
+int write_idx = 0;
+
+
+// current LED state (bit 0)
+u32 led_state = 0;
+
+
+// --------------------------------------------------------
+// Push one price into circular history buffer
+// --------------------------------------------------------
+void push_price_to_history(int p100)
+{
+    price_history[write_idx] = p100;
+    write_idx++;
+    if (write_idx >= HISTORY_LEN) {
+        write_idx = 0;  // wrap around
+    }
+}
+
+
+// --------------------------------------------------------
+// Parse "AAPL,267.46" into price*100 = 26746
+// --------------------------------------------------------
+int parse_price_scaled(char *buf)
+{
+    // Find comma
+    char *comma = 0;
+    for (int i = 0; buf[i] != '\0'; i++) {
+        if (buf[i] == ',') {
+            comma = &buf[i];
+            break;
+        }
+    }
+    if (comma == 0) {
+        return -1; // no comma, invalid
+    }
+
+
+    char *p = comma + 1; // start of price string
+
+
+    int int_part      = 0;
+    int frac_part     = 0;
+    int frac_mult     = 1;
+    int after_decimal = 0;
+
+
+    for (; *p != '\0'; p++) {
+        if (*p >= '0' && *p <= '9') {
+            if (!after_decimal) {
+                int_part = int_part * 10 + (*p - '0');
+            } else {
+                // keep up to 2 decimal digits
+                if (frac_mult <= 100) {
+                    frac_part = frac_part * 10 + (*p - '0');
+                    frac_mult *= 10;
+                }
+            }
+        } else if (*p == '.') {
+            after_decimal = 1;
+        } else {
+            // ignore others (\r, extra chars)
+        }
+    }
+
+
+    // Normalize to exactly 2 decimal places
+    if (frac_mult == 1) {
+        // no decimals
+        frac_part = 0;
+    } else if (frac_mult == 10) {
+        // 1 decimal digit, e.g. 267.4 -> 26740
+        frac_part *= 10;
+    } else if (frac_mult == 100) {
+        // already 2 digits
+    } else {
+        // more than 2 digits – we only kept first two
+    }
+
+
+    return int_part * 100 + frac_part;
+}
+
+
+// --------------------------------------------------------
+// main
+// --------------------------------------------------------
+int main()
+{
+    int status;
+
+
+    // --- Init UART ---
+    status = XUartLite_Initialize(&Uart, UARTLITE_DEVICE_ID);
+    if (status != XST_SUCCESS) {
+        while (1); // hang if wrong device ID
+    }
+
+
+    // --- Init GPIO (LED output) ---
+    status = XGpio_Initialize(&Gpio, GPIO_DEVICE_ID);
+    if (status != XST_SUCCESS) {
+        while (1); // hang if GPIO not found
+    }
+
+
+    // Channel 1 = output (all bits)
+    XGpio_SetDataDirection(&Gpio, 1, 0x00000000);
+    XGpio_DiscreteWrite(&Gpio, 1, 0x0);  // LED off initially
+
+
+    char buf[BUF_SIZE];
+    int idx = 0;
+
+
+    while (1) {
+        // read one byte at a time from UART
+        u8 c;
+        while (XUartLite_Recv(&Uart, &c, 1) != 1) {
+            // spin until we get 1 byte
+        }
+
+
+        if (c == '\n' || c == '\r') {
+            // End of line → terminate string and parse
+            buf[idx] = '\0';
+            idx = 0;
+
+
+            int p100 = parse_price_scaled(buf);
+            if (p100 >= 0) {
+                price_scaled = p100;
+                push_price_to_history(price_scaled);
+
+
+                // toggle LED to show we got a valid price
+                led_state ^= 0x1;
+                XGpio_DiscreteWrite(&Gpio, 1, led_state);
+            }
+        } else {
+            // accumulate characters into buffer
+            if (idx < BUF_SIZE - 1) {
+                buf[idx++] = (char)c;
+            } else {
+                // overflow → reset line
+                idx = 0;
+            }
+        }
+    }
+
+
+    return 0;
+}
+
+
+

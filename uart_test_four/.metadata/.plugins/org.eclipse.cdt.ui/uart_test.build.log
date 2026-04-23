@@ -1,0 +1,26 @@
+17:57:13 **** Build of configuration Debug for project uart_test ****
+make all 
+'Building file: ../src/main.c'
+'Invoking: MicroBlaze gcc compiler'
+mb-gcc -Wall -O0 -g3 -c -fmessage-length=0 -MT"src/main.o" -IC:/FPGA/ECE385_final_project/uart_test_four/final_top/export/final_top/sw/final_top/standalone_microblaze_0/bspinclude/include -mno-xl-reorder -mlittle-endian -mxl-barrel-shift -mxl-pattern-compare -mcpu=v11.0 -mno-xl-soft-mul -Wl,--no-relax -ffunction-sections -fdata-sections -MMD -MP -MF"src/main.d" -MT"src/main.o" -o "src/main.o" "../src/main.c"
+'Finished building: ../src/main.c'
+' '
+'Building file: ../src/platform.c'
+'Invoking: MicroBlaze gcc compiler'
+mb-gcc -Wall -O0 -g3 -c -fmessage-length=0 -MT"src/platform.o" -IC:/FPGA/ECE385_final_project/uart_test_four/final_top/export/final_top/sw/final_top/standalone_microblaze_0/bspinclude/include -mno-xl-reorder -mlittle-endian -mxl-barrel-shift -mxl-pattern-compare -mcpu=v11.0 -mno-xl-soft-mul -Wl,--no-relax -ffunction-sections -fdata-sections -MMD -MP -MF"src/platform.d" -MT"src/platform.o" -o "src/platform.o" "../src/platform.c"
+'Finished building: ../src/platform.c'
+' '
+'Building target: uart_test.elf'
+'Invoking: MicroBlaze gcc linker'
+mb-gcc -Wl,-T -Wl,../src/lscript.ld -LC:/FPGA/ECE385_final_project/uart_test_four/final_top/export/final_top/sw/final_top/standalone_microblaze_0/bsplib/lib -mlittle-endian -mxl-barrel-shift -mxl-pattern-compare -mcpu=v11.0 -mno-xl-soft-mul -Wl,--no-relax -Wl,--gc-sections -o "uart_test.elf"  ./src/main.o ./src/platform.o   -Wl,--start-group,-lxil,-lgcc,-lc,--end-group
+'Finished building target: uart_test.elf'
+' '
+'Invoking: MicroBlaze Print Size'
+mb-size uart_test.elf  |tee "uart_test.elf.size"
+   text	   data	    bss	    dec	    hex	filename
+  12488	    448	   4192	  17128	   42e8	uart_test.elf
+'Finished building: uart_test.elf.size'
+' '
+
+17:57:14 Build Finished (took 1s.365ms)
+

@@ -1,0 +1,509 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>   // <--- NEW for strncmp
+
+#include "xparameters.h"
+#include "xil_types.h"
+#include "xil_io.h"
+#include "sleep.h"
+#include "xuartlite.h"
+#include "xstatus.h"
+#include "xil_printf.h"
+#include "xgpio.h"
+
+// ---------------------------------------------------------------------------
+// HDMI GRAPH IP CONSTANTS  (must match your Vivado address map)
+// ---------------------------------------------------------------------------
+#define HDMI_BASE_ADDR        0x44A00000U
+
+// Offsets (in bytes) from HDMI_BASE_ADDR
+#define OHLC_OFFSET           0               // OHLC BRAM base (candles)
+#define MA_OFFSET             (1024 * 4)      // MA buffer base (optional)
+#define TEXT_OFFSET           (2048 * 4)      // ticker text register (word 2048)
+
+// Screen / graph geometry
+// 640 horizontal pixels / 4-pixel zoom in HDL = 160 candles wide
+#define GRAPH_WIDTH           160
+
+// UART
+#define UARTLITE_DEVICE_ID    XPAR_UARTLITE_0_DEVICE_ID
+
+// Buttons (AXI GPIO 0)
+#define BTN_GPIO_DEVICE_ID    XPAR_GPIO_0_DEVICE_ID
+#define BTN_CHANNEL           1
+
+// Button bits
+#define BTN_TSLA              0x00000001U
+#define BTN_AAPL              0x00000002U
+#define BTN_AMZN              0x00000004U
+
+// ---------------------------------------------------------------------------
+// GLOBAL BUFFERS
+// ---------------------------------------------------------------------------
+u32 graph_data[GRAPH_WIDTH];          // packed OHLC words
+u32 ma_data[GRAPH_WIDTH];             // packed MA (1 byte) in LSB
+int raw_price_history[GRAPH_WIDTH];   // store close_px for MA
+
+XUartLite Uart;
+XGpio     BtnGpio;
+
+// ---------------------------------------------------------------------------
+// CANDLE AGGREGATION: N UART ticks -> 1 candle (non-overlapping)
+// ---------------------------------------------------------------------------
+#define TICKS_PER_CANDLE 4
+
+int agg_count      = 0;
+int agg_open_px    = 0;
+int agg_high_px    = 0;
+int agg_low_px     = 0;
+int agg_close_px   = 0;
+
+// Remember previous candle close so next open matches it
+int last_close_px  = -1;
+
+// ---------------------------------------------------------------------------
+// ZOOM & BASE PRICE
+// ---------------------------------------------------------------------------
+// Dynamic base price in *cents* (e.g., 426.15 -> 42615)
+// First good price we see for the *current symbol* will set this.
+int BASE_PRICE_CENTS = -1;
+
+// Smaller -> more zoom (candles move more per cent)
+// Larger  -> zoomed out (candles move less per cent)
+#define CENTS_PER_PIXEL  8
+
+// ---------------------------------------------------------------------------
+// SYMBOL STATE
+// ---------------------------------------------------------------------------
+typedef enum {
+    SYMBOL_TSLA = 0,
+    SYMBOL_AAPL = 1,
+    SYMBOL_AMZN = 2
+} SymbolId;
+
+static SymbolId current_symbol = SYMBOL_TSLA;
+
+// ---------------------------------------------------------------------------
+// UTILS
+// ---------------------------------------------------------------------------
+
+// Clamp integer to 0..255 and return as u8
+static u8 clamp_to_u8(int val)
+{
+    if (val < 0)   return 0;
+    if (val > 255) return 255;
+    return (u8)val;
+}
+
+// Write 4 ASCII chars to the HDMI text register
+// s must be at least 4 characters: "TSLA", "AAPL", "AMZN", ...
+static void set_ticker_label(const char *s)
+{
+    u32 w =
+        ((u32)s[0] << 24) |
+        ((u32)s[1] << 16) |
+        ((u32)s[2] <<  8) |
+        ((u32)s[3] <<  0);
+
+    Xil_Out32(HDMI_BASE_ADDR + TEXT_OFFSET, w);
+
+    // Optional debug: read back and print
+    u32 rb = Xil_In32(HDMI_BASE_ADDR + TEXT_OFFSET);
+    xil_printf("set_ticker_label('%c%c%c%c'): wrote 0x%08lx, readback 0x%08lx\r\n",
+               s[0], s[1], s[2], s[3],
+               (unsigned long)w, (unsigned long)rb);
+}
+
+// Clear BRAM graph data and local buffers
+static void clear_graph_bram(void)
+{
+    for (int i = 0; i < GRAPH_WIDTH; i++) {
+        graph_data[i]        = 0;
+        ma_data[i]           = 0;
+        raw_price_history[i] = 0;
+
+        Xil_Out32(HDMI_BASE_ADDR + OHLC_OFFSET + (i * 4), 0x00000000U);
+        Xil_Out32(HDMI_BASE_ADDR + MA_OFFSET   + (i * 4), 0x00000000U);
+    }
+}
+
+// Reset all graph-related state when switching symbols
+static void reset_graph_state_for_new_symbol(void)
+{
+    clear_graph_bram();
+
+    agg_count    = 0;
+    agg_open_px  = 0;
+    agg_high_px  = 0;
+    agg_low_px   = 0;
+    agg_close_px = 0;
+
+    BASE_PRICE_CENTS = -1;   // next valid tick will set a new baseline
+    last_close_px    = -1;   // force first candle to use its own close
+
+    xil_printf("Graph + baseline reset for new symbol\r\n");
+}
+
+// ---------------------------------------------------------------------------
+// UPDATE DISPLAY: scroll, insert new candle, recompute MA, write to BRAM
+// open_px / high_px / low_px / close_px are already in pixel space (0–255)
+// ---------------------------------------------------------------------------
+void update_display(int open_px, int high_px, int low_px, int close_px)
+{
+    // 1. Shift history left (scroll effect)
+    for (int i = 0; i < GRAPH_WIDTH - 1; i++) {
+        graph_data[i]        = graph_data[i + 1];
+        ma_data[i]           = ma_data[i + 1];
+        raw_price_history[i] = raw_price_history[i + 1];
+    }
+
+    // 2. Insert new close into history (for MA)
+    raw_price_history[GRAPH_WIDTH - 1] = close_px;
+
+    // 3. Clamp each field to 0..255 and pack into 32-bit OHLC
+    u8 h = clamp_to_u8(high_px);
+    u8 l = clamp_to_u8(low_px);
+    u8 o = clamp_to_u8(open_px);
+    u8 c = clamp_to_u8(close_px);
+
+    // Pack into 32 bits: [31:24] H, [23:16] L, [15:8] O, [7:0] C
+    graph_data[GRAPH_WIDTH - 1] =
+          ((u32)h << 24)
+        | ((u32)l << 16)
+        | ((u32)o <<  8)
+        |  (u32)c;
+
+    // 4. Simple moving average over last 10 closes (in pixel units)
+    int sum   = 0;
+    int count = 0;
+    for (int k = 0; k < 10; k++) {
+        int idx = (GRAPH_WIDTH - 1) - k;
+        if (idx >= 0 && raw_price_history[idx] > 0) {
+            sum += raw_price_history[idx];
+            count++;
+        }
+    }
+    int avg_px = (count > 0) ? (sum / count) : close_px;
+    ma_data[GRAPH_WIDTH - 1] = clamp_to_u8(avg_px);
+
+    // 5. Burst-write both buffers to the HDMI IP BRAM
+    for (int i = 0; i < GRAPH_WIDTH; i++) {
+        // Candle data
+        Xil_Out32(HDMI_BASE_ADDR + OHLC_OFFSET + (i * 4), graph_data[i]);
+        // MA data (if IP uses it; otherwise harmless)
+        Xil_Out32(HDMI_BASE_ADDR + MA_OFFSET   + (i * 4), ma_data[i]);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Parse "TSLA,426.1500" -> price in cents (e.g., 42615)
+// Returns -1 on parse error
+// ---------------------------------------------------------------------------
+int parse_price_cents(char *buf)
+{
+    // 1. Find comma
+    char *comma = 0;
+    for (int i = 0; buf[i] != '\0'; i++) {
+        if (buf[i] == ',') {
+            comma = &buf[i];
+            break;
+        }
+    }
+    if (comma == 0) {
+        return -1;  // malformed line, no comma
+    }
+
+    char *p = comma + 1;   // start of price string (e.g. "426.1500")
+
+    int int_part      = 0;
+    int frac_part     = 0;
+    int frac_mult     = 1; // tracks 1,10,100
+    int after_decimal = 0;
+
+    for (; *p != '\0'; p++) {
+        if (*p >= '0' && *p <= '9') {
+            if (!after_decimal) {
+                int_part = int_part * 10 + (*p - '0');
+            } else {
+                // keep up to 2 decimal digits
+                if (frac_mult <= 100) {
+                    frac_part = frac_part * 10 + (*p - '0');
+                    frac_mult *= 10;
+                }
+            }
+        } else if (*p == '.') {
+            after_decimal = 1;
+        } else {
+            // ignore other chars
+        }
+    }
+
+    // Normalize to exactly 2 decimal places
+    if (frac_mult == 1) {
+        // no decimals
+        frac_part = 0;
+    } else if (frac_mult == 10) {
+        // 1 decimal digit: x.y -> x.y0
+        frac_part *= 10;
+    } else {
+        // frac_mult == 100 or more: already 2 digits kept
+    }
+
+    return int_part * 100 + frac_part;
+}
+
+// ---------------------------------------------------------------------------
+// NEW: check if the UART line's symbol matches current_symbol
+// buf looks like "TSLA,430.2450" etc.
+// ---------------------------------------------------------------------------
+static int line_symbol_matches_current(const char *buf)
+{
+    const char *expect = "TSLA";
+
+    switch (current_symbol) {
+    case SYMBOL_TSLA: expect = "TSLA"; break;
+    case SYMBOL_AAPL: expect = "AAPL"; break;
+    case SYMBOL_AMZN: expect = "AMZN"; break;
+    default:          expect = "TSLA"; break;
+    }
+
+    size_t len = strlen(expect);
+
+    // Must start with the expected symbol and then a comma
+    if (strncmp(buf, expect, len) != 0)
+        return 0;
+    if (buf[len] != ',')
+        return 0;
+
+    return 1;
+}
+
+// ---------------------------------------------------------------------------
+// Handle button rising edges: change symbol, update label, reset graph,
+// and send S:<SYMB> to Python. Also clear any partial UART line.
+// ---------------------------------------------------------------------------
+static void handle_button_rising(u32 rising, int *p_line_idx)
+{
+    if (rising == 0) return;
+
+    xil_printf("btn rising=0x%08lx\r\n", (unsigned long)rising);
+
+    int idx_reset = 0;
+
+    if (rising & BTN_TSLA) {
+        if (current_symbol != SYMBOL_TSLA) {
+            current_symbol = SYMBOL_TSLA;
+            xil_printf("Button -> TSLA\r\n");
+            set_ticker_label("TSLA");
+            reset_graph_state_for_new_symbol();
+            xil_printf("S:TSLA\r\n");
+            idx_reset = 1;
+        }
+    }
+
+    if (rising & BTN_AAPL) {
+        if (current_symbol != SYMBOL_AAPL) {
+            current_symbol = SYMBOL_AAPL;
+            xil_printf("Button -> AAPL\r\n");
+            set_ticker_label("AAPL");
+            reset_graph_state_for_new_symbol();
+            xil_printf("S:AAPL\r\n");
+            idx_reset = 1;
+        }
+    }
+
+    if (rising & BTN_AMZN) {
+        if (current_symbol != SYMBOL_AMZN) {
+            current_symbol = SYMBOL_AMZN;
+            set_ticker_label("AMZN");
+            reset_graph_state_for_new_symbol();
+            xil_printf("Button -> AMZN\r\n");
+            xil_printf("S:AMZN\r\n");
+            idx_reset = 1;
+        }
+    }
+
+    if (idx_reset && p_line_idx) {
+        *p_line_idx = 0;    // drop any partial UART line
+    }
+}
+
+// ---------------------------------------------------------------------------
+// MAIN
+// ---------------------------------------------------------------------------
+int main()
+{
+    int status;
+
+    xil_printf("HDMI Stock Graph + Pushbutton Symbol Select starting...\r\n");
+
+    // -----------------------------------------------------------------------
+    // 1. Initialize frame buffers and clear BRAM
+    // -----------------------------------------------------------------------
+    clear_graph_bram();
+
+    agg_count      = 0;
+    agg_open_px    = 0;
+    agg_high_px    = 0;
+    agg_low_px     = 0;
+    agg_close_px   = 0;
+    last_close_px  = -1;
+
+    BASE_PRICE_CENTS = -1;
+
+    // Default symbol at boot: TSLA
+    current_symbol = SYMBOL_TSLA;
+    set_ticker_label("TSLA");
+
+    // -----------------------------------------------------------------------
+    // 2. Initialize UART
+    // -----------------------------------------------------------------------
+    status = XUartLite_Initialize(&Uart, UARTLITE_DEVICE_ID);
+    if (status != XST_SUCCESS) {
+        xil_printf("ERROR: XUartLite_Initialize failed (status=%d)\r\n", status);
+        return XST_FAILURE;
+    }
+    xil_printf("UART initialized (device ID %d)\r\n", UARTLITE_DEVICE_ID);
+
+    // -----------------------------------------------------------------------
+    // 3. Initialize buttons (AXI GPIO 0)
+    // -----------------------------------------------------------------------
+    status = XGpio_Initialize(&BtnGpio, BTN_GPIO_DEVICE_ID);
+    if (status != XST_SUCCESS) {
+        xil_printf("ERROR: XGpio_Initialize failed (status=%d)\r\n", status);
+        return XST_FAILURE;
+    }
+
+    // Channel 1 as input
+    XGpio_SetDataDirection(&BtnGpio, BTN_CHANNEL, 0xFFFFFFFFU);
+    xil_printf("Buttons (GPIO_0) initialized\r\n");
+
+    // -----------------------------------------------------------------------
+    // 4. UART receive + button polling loop
+    // -----------------------------------------------------------------------
+    u8   c;
+    char buf[64];
+    int  idx = 0;
+
+    u32 btn_prev   = XGpio_DiscreteRead(&BtnGpio, BTN_CHANNEL);
+    u32 btn_curr   = btn_prev;
+    u32 btn_rising = 0;
+
+    xil_printf("Entering main UART + button loop...\r\n");
+
+    while (1) {
+
+        // -------- Read buttons and detect rising edges --------
+        btn_curr   = XGpio_DiscreteRead(&BtnGpio, BTN_CHANNEL);
+        btn_rising = (btn_curr & ~btn_prev);
+        if (btn_rising) {
+            handle_button_rising(btn_rising, &idx);
+        }
+        btn_prev = btn_curr;
+
+        // -------- Non-blocking UART receive (1 byte at a time) --------
+        if (XUartLite_Recv(&Uart, &c, 1) == 1) {
+            // Build up line
+            if (c == '\n' || c == '\r') {
+                if (idx == 0) {
+                    // empty line, ignore
+                    continue;
+                }
+
+                buf[idx] = '\0';
+                idx      = 0;
+
+                // Debug: show the line we received
+                xil_printf("UART line: '%s'\r\n", buf);
+
+                // *** NEW: ensure this line belongs to current_symbol ***
+                if (!line_symbol_matches_current(buf)) {
+                    xil_printf("Ignoring line for wrong symbol (current=%d): '%s'\r\n",
+                               (int)current_symbol, buf);
+                    continue;
+                }
+
+                // 1) Parse price
+                int price_cents = parse_price_cents(buf);
+                if (price_cents < 0) {
+                    xil_printf("Parse error: %s\r\n", buf);
+                    continue;
+                }
+
+                // 2) Dynamic base price (per symbol)
+                if (BASE_PRICE_CENTS < 0) {
+                    BASE_PRICE_CENTS = price_cents;
+                    xil_printf("BASE_PRICE_CENTS set to %d\r\n", BASE_PRICE_CENTS);
+                }
+
+                // 3) Convert real price (cents) -> vertical pixel
+                int delta_cents = price_cents - BASE_PRICE_CENTS;
+                int offset_px   = delta_cents / CENTS_PER_PIXEL;
+
+                // Close price around vertical center (128)
+                int close_px = 128 + offset_px;
+
+                // Clamp into visible part of [0..255]
+                if (close_px < 10)  close_px = 10;
+                if (close_px > 245) close_px = 245;
+
+                // ------------------------------------------------------------------
+                // 4) NON-OVERLAPPING CANDLE AGGREGATION:
+                //    TICKS_PER_CANDLE ticks -> 1 candle
+                //    Ensure next candle's open = previous candle's close
+                // ------------------------------------------------------------------
+                if (agg_count == 0) {
+                    // First tick of a new candle
+
+                    // If we have a previous candle, force the new open
+                    // to match that candle's close for visual continuity.
+                    if (last_close_px >= 0) {
+                        agg_open_px = last_close_px;
+                    } else {
+                        // First-ever candle: just use this close as open
+                        agg_open_px = close_px;
+                    }
+
+                    // High/low must include both open and this first close
+                    agg_high_px  = (close_px > agg_open_px) ? close_px : agg_open_px;
+                    agg_low_px   = (close_px < agg_open_px) ? close_px : agg_open_px;
+                    agg_close_px = close_px;
+                } else {
+                    // Update high/low, always update close
+                    if (close_px > agg_high_px) agg_high_px = close_px;
+                    if (close_px < agg_low_px)  agg_low_px  = close_px;
+                    agg_close_px = close_px;
+                }
+
+                agg_count++;
+
+                if (agg_count >= TICKS_PER_CANDLE) {
+                    xil_printf("Emit candle: O=%d H=%d L=%d C=%d\r\n",
+                               agg_open_px, agg_high_px, agg_low_px, agg_close_px);
+
+                    update_display(agg_open_px, agg_high_px, agg_low_px, agg_close_px);
+
+                    // Remember this close for the next candle's open
+                    last_close_px = agg_close_px;
+
+                    // reset for next candle
+                    agg_count = 0;
+                }
+
+            } else {
+                // accumulate into line buffer (protect against overflow)
+                if (idx < (int)sizeof(buf) - 1) {
+                    buf[idx++] = (char)c;
+                } else {
+                    // overflow -> reset line
+                    idx = 0;
+                }
+            }
+        }
+    }
+
+    // never reached
+    // return 0;
+}
+
+

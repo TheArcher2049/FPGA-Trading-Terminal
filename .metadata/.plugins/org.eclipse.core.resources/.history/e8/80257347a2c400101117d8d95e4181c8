@@ -1,0 +1,23 @@
+#include "xparameters.h"
+#include "xuartlite.h"
+#include "xil_printf.h"
+
+#define UARTLITE_DEVICE_ID XPAR_UARTLITE_0_DEVICE_ID
+
+XUartLite Uart;
+
+u8 uart_getc() {
+    u8 c;
+    while (XUartLite_Recv(&Uart, &c, 1) != 1) {}
+    return c;
+}
+
+int main() {
+    XUartLite_Initialize(&Uart, UARTLITE_DEVICE_ID);
+    xil_printf("MicroBlaze UART ready. Send something from Python.\r\n");
+
+    while (1) {
+        u8 c = uart_getc();
+        xil_printf("Got: %c\r\n", c);
+    }
+}

@@ -1,0 +1,192 @@
+#include <stdio.h>
+#include <stdlib.h>           // for rand()
+#include "xparameters.h"
+#include "xil_types.h"
+#include "xil_io.h"           // for Xil_Out32
+#include "sleep.h"            // for usleep()
+#include "xuartlite.h"        // UART driver
+#include "xstatus.h"
+#include "xil_printf.h"       // xil_printf
+
+// --- USB INCLUDES ---
+#include "lw_usb/project_config.h"
+#include "lw_usb/USB.h"
+#include "lw_usb/HID.h"
+
+// ---------------------------------------------------------------------------
+// HARDWARE ADDRESSES
+// ---------------------------------------------------------------------------
+#define HDMI_BASE_ADDR        0x44A00000U
+#define OHLC_OFFSET           0
+#define MA_OFFSET             (1024 * 4)
+#define MA2_OFFSET            (2048 * 4)
+#define TEXT_OFFSET           (3072 * 4)
+#define GRAPH_WIDTH           160
+
+// ---------------------------------------------------------------------------
+// GLOBAL BUFFERS
+// ---------------------------------------------------------------------------
+u32 graph_data[GRAPH_WIDTH];
+u32 ma_data[GRAPH_WIDTH];
+u32 ma2_data[GRAPH_WIDTH];
+int raw_price_history[GRAPH_WIDTH];
+
+// ---------------------------------------------------------------------------
+// ZOOM & BASE PRICE
+// ---------------------------------------------------------------------------
+int BASE_PRICE_CENTS = 26500;
+#define CENTS_PER_PIXEL  5
+
+// USB Keyboard Buffer
+static BOOT_KBD_REPORT kbd_buf;
+
+// ---------------------------------------------------------------------------
+// UTILS
+// ---------------------------------------------------------------------------
+static u8 clamp_to_u8(int val) {
+    if (val < 0)   return 0;
+    if (val > 255) return 255;
+    return (u8)val;
+}
+
+// ---------------------------------------------------------------------------
+// UPDATE DISPLAY FUNCTION
+// ---------------------------------------------------------------------------
+void update_display(int open_px, int high_px, int low_px, int close_px)
+{
+    // Shift history left
+    for (int i = 0; i < GRAPH_WIDTH - 1; i++) {
+        graph_data[i]        = graph_data[i + 1];
+        ma_data[i]           = ma_data[i + 1];
+        ma2_data[i]          = ma2_data[i + 1];
+        raw_price_history[i] = raw_price_history[i + 1];
+    }
+
+    // Insert new data
+    raw_price_history[GRAPH_WIDTH - 1] = close_px;
+
+    u8 h = clamp_to_u8(high_px);
+    u8 l = clamp_to_u8(low_px);
+    u8 o = clamp_to_u8(open_px);
+    u8 c = clamp_to_u8(close_px);
+
+    graph_data[GRAPH_WIDTH - 1] = ((u32)h << 24) | ((u32)l << 16) | ((u32)o << 8) | ((u32)c);
+
+    // Calculate SMAs (Simple Moving Averages)
+    int sum = 0, count = 0;
+    for (int k = 0; k < 10; k++) {
+        int idx = (GRAPH_WIDTH - 1) - k;
+        if (idx >= 0 && raw_price_history[idx] > 0) {
+            sum += raw_price_history[idx];
+            count++;
+        }
+    }
+    int avg_px = (count > 0) ? (sum / count) : close_px;
+    ma_data[GRAPH_WIDTH - 1] = clamp_to_u8(avg_px);
+
+    int sum2 = 0, count2 = 0;
+    for (int k = 0; k < 20; k++) {
+        int idx = (GRAPH_WIDTH - 1) - k;
+        if (idx >= 0 && raw_price_history[idx] > 0) {
+            sum2 += raw_price_history[idx];
+            count2++;
+        }
+    }
+    int avg2_px = (count2 > 0) ? (sum2 / count2) : close_px;
+    ma2_data[GRAPH_WIDTH - 1] = clamp_to_u8(avg2_px);
+
+    // Write to FPGA
+    for (int i = 0; i < GRAPH_WIDTH; i++) {
+        Xil_Out32(HDMI_BASE_ADDR + OHLC_OFFSET + (i * 4), graph_data[i]);
+        Xil_Out32(HDMI_BASE_ADDR + MA_OFFSET   + (i * 4), ma_data[i]);
+        Xil_Out32(HDMI_BASE_ADDR + MA2_OFFSET  + (i * 4), ma2_data[i]);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// MAIN
+// ---------------------------------------------------------------------------
+int main()
+{
+    xil_printf("------------------------------------------------\r\n");
+    xil_printf("  Live Market Display & USB Host Driver Starting\r\n");
+    xil_printf("------------------------------------------------\r\n");
+
+    // 1. Initialize USB Hardware
+    MAX3421E_init();
+    USB_init();
+
+    // 2. Clear Screen / Initialize HDMI
+    for (int i = 0; i < GRAPH_WIDTH; i++) {
+        raw_price_history[i] = 0;
+        graph_data[i] = 0;
+        ma_data[i] = 0;
+        ma2_data[i] = 0;
+        Xil_Out32(HDMI_BASE_ADDR + OHLC_OFFSET + (i * 4), 0);
+        Xil_Out32(HDMI_BASE_ADDR + MA_OFFSET   + (i * 4), 0);
+        Xil_Out32(HDMI_BASE_ADDR + MA2_OFFSET  + (i * 4), 0);
+    }
+    Xil_Out32(HDMI_BASE_ADDR + TEXT_OFFSET, 0x54455354U); // "TEST"
+
+    // 3. Simulation Variables
+    int current_price_cents = BASE_PRICE_CENTS;
+    srand(123);
+
+    // Main Loop
+    while (1) {
+        // ============================================================
+        // USB POLL TASK
+        // ============================================================
+        MAX3421E_Task(); // Handle hardware interrupts (connect/disconnect)
+        USB_Task();      // Handle USB Protocol State Machine
+
+        // Check if a USB device is enumerated and running
+        if (GetUsbTaskState() == USB_STATE_RUNNING) {
+            // Poll the Keyboard
+            // kbdPoll requests data from the keyboard. If no key is pressed,
+            // the keyboard usually NAKs or returns same data.
+            if (kbdPoll(&kbd_buf) == 0) { // 0 indicates successful packet receipt
+
+                // Check if any key is currently pressed (Scan code > 0)
+                // We check the first key in the rollover buffer
+                if (kbd_buf.keycode[0] > 0) {
+                    xil_printf("Key Pressed: 0x%02x\r\n", kbd_buf.keycode[0]);
+
+                    // Example interaction: Reset graph on 'R' (0x15 is 'R' scan code)
+                    if(kbd_buf.keycode[0] == 0x15) {
+                        xil_printf("RESETTING GRAPH!\r\n");
+                        current_price_cents = BASE_PRICE_CENTS;
+                    }
+                }
+            }
+        }
+
+        // ============================================================
+        // GRAPH UPDATE TASK
+        // ============================================================
+
+        // Brownian Motion Logic
+        int delta = (rand() % 100) - 50;
+        int prev_price = current_price_cents;
+        current_price_cents += delta;
+
+        if(current_price_cents < 20000) current_price_cents = 20000;
+        if(current_price_cents > 35000) current_price_cents = 35000;
+
+        int open_px  = 128 + ((prev_price - BASE_PRICE_CENTS) / CENTS_PER_PIXEL);
+        int close_px = 128 + ((current_price_cents - BASE_PRICE_CENTS) / CENTS_PER_PIXEL);
+        int high_val = (open_px > close_px ? open_px : close_px) + (rand() % 10);
+        int low_val  = (open_px < close_px ? open_px : close_px) - (rand() % 10);
+
+        update_display(open_px, high_val, low_val, close_px);
+
+        // Slow down the loop slightly to mimic real-time data
+        // NOTE: Too long of a sleep will make the keyboard sluggish.
+        // 50ms (50000us) is 20Hz, which is acceptable for both graph and typing.
+        usleep(50000);
+    }
+
+    return 0;
+}
+
+

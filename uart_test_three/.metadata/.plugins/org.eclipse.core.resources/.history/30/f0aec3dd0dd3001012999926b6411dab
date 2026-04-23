@@ -1,0 +1,259 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include "xparameters.h"
+#include "xil_types.h"
+#include "xil_io.h"
+#include "sleep.h"
+#include "xuartlite.h"
+#include "xstatus.h"
+#include "xil_printf.h"
+
+// --- UNDEFINE MACROS TO AVOID CONFLICTS ---
+#ifdef TRUE
+#undef TRUE
+#endif
+#ifdef FALSE
+#undef FALSE
+#endif
+
+// --- USB INCLUDES ---
+#include "lw_usb/project_config.h"
+
+
+// ---------------------------------------------------------------------------
+// HARDWARE ADDRESSES
+// ---------------------------------------------------------------------------
+#define HDMI_BASE_ADDR        0x44A00000U // Ensure this matches Vivado Address Editor
+#define OHLC_OFFSET           0
+#define MA_OFFSET             (1024 * 4)
+#define MA2_OFFSET            (2048 * 4)
+#define TEXT_OFFSET           (3072 * 4)  // For Ticker Name
+#define TAB_OFFSET    		  (3073 * 4)  // For highlighting tabs
+#define BTN_STATE_OFFSET 	  (3074 * 4)
+
+#define GRAPH_WIDTH           160
+
+// ---------------------------------------------------------------------------
+// STOCK CONSTANTS & STRUCTS
+// ---------------------------------------------------------------------------
+typedef struct {
+    u32 hex_name;       // ASCII packed into 32-bit (e.g., "AAPL")
+    int base_price;     // In Cents
+    int volatility;     // Randomness magnitude
+    char* log_name;     // For UART printing
+} StockProfile;
+
+// Stock Profiles
+// ASCII Hex: 'A'=0x41, 'P'=0x50, 'L'=0x4C ...
+const StockProfile S_AAPL = {0x4141504C, 15000, 100, "Apple"};       // $150.00
+const StockProfile S_TSLA = {0x54534C41, 22000, 400, "Tesla"};       // $220.00 (High Volatility)
+const StockProfile S_SPX  = {0x20535058, 45000, 50,  "S&P 500"};     // $450.00 (Low Volatility)
+const StockProfile S_BTC  = {0x20425443, 30000, 800, "Bitcoin"};     // $300.00 (Extreme Volatility scaled down)
+
+// USB Keycodes (HID Standard)
+#define KEY_1  0x1E
+#define KEY_2  0x1F
+#define KEY_3  0x20
+#define KEY_4  0x21
+
+#define KEY_B  0X05
+#define KEY_S  0x16
+#define KEY_R  0x15
+// ---------------------------------------------------------------------------
+// GLOBAL BUFFERS
+// ---------------------------------------------------------------------------
+u32 graph_data[GRAPH_WIDTH];
+u32 ma_data[GRAPH_WIDTH];
+u32 ma2_data[GRAPH_WIDTH];
+int raw_price_history[GRAPH_WIDTH];
+static BOOT_KBD_REPORT kbd_buf;
+
+// Current State
+int current_price_cents;
+int volatility;
+#define CENTS_PER_PIXEL 5
+
+// ---------------------------------------------------------------------------
+// HELPER FUNCTIONS
+// ---------------------------------------------------------------------------
+static u8 clamp_to_u8(int val) {
+    if (val < 0)   return 0;
+    if (val > 255) return 255;
+    return (u8)val;
+}
+
+void clear_screen() {
+    for (int i = 0; i < GRAPH_WIDTH; i++) {
+        raw_price_history[i] = 0;
+        graph_data[i] = 0;
+        ma_data[i] = 0;
+        ma2_data[i] = 0;
+        // Write 0s to FPGA memory
+        Xil_Out32(HDMI_BASE_ADDR + OHLC_OFFSET + (i * 4), 0);
+        Xil_Out32(HDMI_BASE_ADDR + MA_OFFSET   + (i * 4), 0);
+        Xil_Out32(HDMI_BASE_ADDR + MA2_OFFSET  + (i * 4), 0);
+    }
+}
+
+void load_stock(StockProfile s, int tab_id) {
+    xil_printf("Loading Stock: %s\r\n", s.log_name);
+
+    // 1. Update Ticker Text on Screen
+    Xil_Out32(HDMI_BASE_ADDR + TEXT_OFFSET, s.hex_name);
+    Xil_Out32(HDMI_BASE_ADDR + TAB_OFFSET, tab_id);
+
+    // 2. Reset Simulation Params
+    current_price_cents = s.base_price;
+    volatility = s.volatility;
+
+    // 3. Clear History
+    clear_screen();
+}
+
+void update_display(int open_px, int high_px, int low_px, int close_px)
+{
+    // Shift Data Left
+    for (int i = 0; i < GRAPH_WIDTH - 1; i++) {
+        graph_data[i]        = graph_data[i + 1];
+        ma_data[i]           = ma_data[i + 1];
+        ma2_data[i]          = ma2_data[i + 1];
+        raw_price_history[i] = raw_price_history[i + 1];
+    }
+
+    // New Data
+    raw_price_history[GRAPH_WIDTH - 1] = close_px;
+
+    u32 packed_ohlc = ((u32)clamp_to_u8(high_px) << 24) |
+                      ((u32)clamp_to_u8(low_px) << 16)  |
+                      ((u32)clamp_to_u8(open_px) << 8)  |
+                      ((u32)clamp_to_u8(close_px));
+
+    graph_data[GRAPH_WIDTH - 1] = packed_ohlc;
+
+    // Compute MAs
+    int sum = 0, count = 0;
+    for (int k = 0; k < 10; k++) {
+        int idx = (GRAPH_WIDTH - 1) - k;
+        if (idx >= 0 && raw_price_history[idx] > 0) { sum += raw_price_history[idx]; count++; }
+    }
+    ma_data[GRAPH_WIDTH - 1] = (count > 0) ? clamp_to_u8(sum / count) : clamp_to_u8(close_px);
+
+    int sum2 = 0, count2 = 0;
+    for (int k = 0; k < 20; k++) {
+        int idx = (GRAPH_WIDTH - 1) - k;
+        if (idx >= 0 && raw_price_history[idx] > 0) { sum2 += raw_price_history[idx]; count2++; }
+    }
+    ma2_data[GRAPH_WIDTH - 1] = (count2 > 0) ? clamp_to_u8(sum2 / count2) : clamp_to_u8(close_px);
+
+    // Write to FPGA
+    for (int i = 0; i < GRAPH_WIDTH; i++) {
+        Xil_Out32(HDMI_BASE_ADDR + OHLC_OFFSET + (i * 4), graph_data[i]);
+        Xil_Out32(HDMI_BASE_ADDR + MA_OFFSET   + (i * 4), ma_data[i]);
+        Xil_Out32(HDMI_BASE_ADDR + MA2_OFFSET  + (i * 4), ma2_data[i]);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// MAIN
+// ---------------------------------------------------------------------------
+int main()
+{
+    xil_printf("--- STOCK MARKET TERMINAL STARTING ---\r\n");
+
+    // Init Hardware
+    MAX3421E_init();
+    USB_init();
+
+    // Default Stock (Apple)
+    load_stock(S_AAPL, 1);
+
+    srand(123);
+
+    while (1) {
+        // 1. Poll USB
+        MAX3421E_Task();
+        USB_Task();
+
+        if (GetUsbTaskState() == USB_STATE_RUNNING) {
+            if (kbdPoll(&kbd_buf) == 0 && kbd_buf.keycode[0] > 0) {
+                u8 key = kbd_buf.keycode[0];
+
+                // Debounce simple (only act if different or sufficient delay - ignored for simplicity here)
+                // Switch Logic
+                switch(key) {
+                    case KEY_1: load_stock(S_AAPL, 1); break;
+                    case KEY_2: load_stock(S_TSLA, 2); break;
+                    case KEY_3: load_stock(S_SPX, 3);  break;
+                    case KEY_4: load_stock(S_BTC, 4);  break;
+
+                    case KEY_R:
+                        xil_printf("Resetting View...\r\n");
+                        clear_screen();
+                        break;
+
+                    case KEY_B:
+                    	btn_state = 1;
+                    	break;
+
+                    case KEY_S:
+                    	btn_state = 2;
+                    	break;
+                }
+            }
+        }
+
+        //writing the button state
+        Xil_Out32(HDMI_BASE_ADDR + BTN_STATE_OFFSET, btn_state);
+
+        // 2. Generate Graph Data
+        // Center the graph around 128 (middle of 0-255 range)
+        // We use the Base Price to determine the delta
+
+        int delta = (rand() % volatility) - (volatility / 2);
+        current_price_cents += delta;
+
+        // Calculate Pixel Height (relative to base price)
+        // 128 is the visual center of the graph
+        int center_px = 128;
+        // Determine which base price to use (we have to look at current text reg or track state)
+        // We will just use the global current_price_cents vs the original base of the loaded stock
+        // To keep it simple, we just plot relative drift.
+
+        // Simulating open/close
+        int prev_price = current_price_cents - delta;
+
+        // This math centers the *Base Price* at pixel 128.
+        // If price goes up, pixel value goes UP (requires inverted Y in hardware usually, but your hardware handles 255-val).
+        int open_px  = 128 + ((prev_price - current_price_cents) / CENTS_PER_PIXEL); // Simplified visual drift
+        // Actually, better visualization:
+        // Use a static base. If we loaded AAPL at 15000, that's pixel 128.
+        // But we need to track which stock is loaded.
+        // Let's rely on the relative movement calculated in update_display logic
+
+        // REVISED SIMULATION:
+        // Just create a visual "candlestick" from the random walk
+        // We don't need strict correlation to the Base Price for the visual demo,
+        // just continuity from the previous pixel.
+
+        int last_valid_pixel = 128;
+        if(raw_price_history[GRAPH_WIDTH-1] != 0) last_valid_pixel = raw_price_history[GRAPH_WIDTH-1];
+
+        int step = (rand() % 10) - 5; // Small random step
+        int close_px = last_valid_pixel + step;
+
+        // Clamp bounds
+        if(close_px < 20) close_px = 20;
+        if(close_px > 230) close_px = 230;
+
+        int high_val = close_px + (rand()%5);
+        int low_val = (last_valid_pixel < close_px ? last_valid_pixel : close_px) - (rand()%5);
+
+        update_display(last_valid_pixel, high_val, low_val, close_px);
+
+        usleep(50000); // 20Hz update rate
+    }
+
+    return 0;
+}
+
+

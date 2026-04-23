@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="ASCII"?>
+<sdkproject:SdkProject xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:sdkproject="http://www.xilinx.com/sdkproject" name="uart_test" location="C:/FPGA/ECE385_final_project/uart_test" platform="C:/FPGA/ECE385_final_project/mb_platform/export/mb_platform/mb_platform.xpfm" platformUID="xilinx:::0.0(custom)" systemProject="uart_test_system" sysConfig="mb_platform" runtime="C/C++" cpu="standalone_domain" cpuInstance="microblaze_0" os="standalone" mssSignature="a1fe5534fc28403718be481ddafa98ad">
+  <configuration name="Debug" id="xilinx.gnu.mb.exe.debug.669372475">
+    <configBuildOptions xsi:type="sdkproject:SdkOptions"/>
+    <lastBuildOptions xsi:type="sdkproject:SdkOptions"/>
+  </configuration>
+  <configuration name="Release" id="xilinx.gnu.mb.exe.release.681191963" dirty="true">
+    <configBuildOptions xsi:type="sdkproject:SdkOptions"/>
+  </configuration>
+  <template appTemplateName="hello_world"/>
+</sdkproject:SdkProject>

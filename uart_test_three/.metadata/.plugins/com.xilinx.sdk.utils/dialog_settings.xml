@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<section name="Workbench">
+	<item key="scw_hwspec" value="C:\FPGA\ECE385_final_project"/>
+	<item key="scw_hwspec_file_selection" value="D:\ECE385_final_project_Final"/>
+	<item key="debug_files_selection" value="D:\ECE385_final_project_Final\uart_test_three\mb_platform\hw"/>
+</section>
